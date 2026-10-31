@@ -139,7 +139,7 @@ h1, h2, h3 { margin: 0; }
 .schritte span.an { background: var(--accent); }
 
 /* Tab-Leiste */
-.tableiste { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; height: calc(var(--tabbar) + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, 0.82); -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px); border-top: 0.5px solid var(--line); display: flex; align-items: flex-start; justify-content: space-around; padding: 7px 6px env(safe-area-inset-bottom); z-index: 10; }
+.tableiste { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; height: calc(var(--tabbar) + env(safe-area-inset-bottom)); background: var(--surface); border-top: 0.5px solid var(--line); display: flex; align-items: flex-start; justify-content: space-around; padding: 7px 6px env(safe-area-inset-bottom); z-index: 10; }
 .tab { flex: 1; min-height: 50px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; color: var(--muted); text-decoration: none; letter-spacing: 0; }
 .tab.active { color: var(--accent-text); }
 .tab:hover { color: var(--text); }
@@ -151,7 +151,7 @@ h1, h2, h3 { margin: 0; }
 
 /* Chat – aufgebaut wie moderne KI-Apps: Antworten als freier Text, eigene Nachrichten als Blase */
 .chat { display: flex; flex-direction: column; min-height: 100dvh; }
-.chat-kopf { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; background: rgba(247, 245, 241, 0.85); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); }
+.chat-kopf { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; background: var(--bg); }
 .chat-kopf-platz { width: 44px; }
 .chat-kopf-titel { display: flex; align-items: center; gap: 8px; }
 .chat-kopf-titel, .chat-kopf-knopf { transition: opacity 0.2s; }
@@ -276,3 +276,5 @@ h1, h2, h3 { margin: 0; }
 .winkel-tabelle div { background: var(--surface); box-shadow: var(--schatten); border-radius: 12px; padding: 8px 12px; }
 .winkel-tabelle b { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; display: block; font-variant-numeric: tabular-nums; }
 .akzent-text { color: var(--accent); }
+.buehne-knopf.licht { right: 62px; }
+.buehne-knopf.licht.an { background: var(--accent); color: #1a1a1a; }

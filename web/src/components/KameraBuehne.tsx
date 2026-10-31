@@ -1,7 +1,7 @@
 // Livebild mit Skelett und Winkeln. Bild und Erkennung bleiben auf dem Gerät.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PoseLandmarker } from '@mediapipe/tasks-vision'
-import { erkenne, erkennungLaden, kameraStarten, kameraStoppen, type Kamera } from '../lib/pose/erkennung'
+import { erkenne, erkennungLaden, kameraStarten, kameraStoppen, lichtMoeglich, lichtSchalten, type Kamera } from '../lib/pose/erkennung'
 import { GELENK, Glaetter, besteSeite, gelenkPunkte, gelenkScheitel, gelenkwinkel, type GelenkId, type Punkt, type Seite } from '../lib/pose/geometrie'
 import { Icon } from './Icon'
 
@@ -36,6 +36,9 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
   const [richtung, setRichtung] = useState<Kamera>('environment')
   const [status, setStatus] = useState<Status>({ art: 'laedt' })
   const [langsam, setLangsam] = useState(false)
+  const strom = useRef<MediaStream | null>(null)
+  const [lichtGeht, setLichtGeht] = useState(false)
+  const [licht, setLicht] = useState(false)
 
   // Aktuelle Props für die Schleife, ohne sie bei jeder Änderung neu zu starten
   const aktuell = useRef({ gelenke, fehler, beimBild, pausiert })
@@ -43,7 +46,6 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
 
   useEffect(() => {
     let aus = false
-    let strom: MediaStream | null = null
     let schleife = 0
     let erkennung: PoseLandmarker | null = null
     const glaetter = new Glaetter()
@@ -56,8 +58,11 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
       setStatus({ art: 'laedt' })
       try {
         const v = video.current as HTMLVideoElement
-        ;[erkennung, strom] = await Promise.all([erkennungLaden(), kameraStarten(v, richtung)])
-        if (aus) { kameraStoppen(strom); return }
+        const [e, st] = await Promise.all([erkennungLaden(), kameraStarten(v, richtung)])
+        erkennung = e
+        if (aus) { kameraStoppen(st); return }
+        strom.current = st
+        setLichtGeht(lichtMoeglich(st))
         setStatus({ art: 'laeuft' })
         schleife = requestAnimationFrame(bild)
       } catch (e) {
@@ -96,7 +101,10 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
       aus = true
       window.clearTimeout(hinweis)
       cancelAnimationFrame(schleife)
-      kameraStoppen(strom)
+      kameraStoppen(strom.current) // stoppt auch das Licht
+      strom.current = null
+      setLicht(false)
+      setLichtGeht(false)
     }
   }, [richtung])
 
@@ -111,6 +119,20 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
         </div>
       )}
       {status.art === 'fehler' && <div className="buehne-hinweis fehler" role="alert">{status.text}</div>}
+      {lichtGeht && (
+        <button
+          type="button"
+          className={`buehne-knopf licht${licht ? ' an' : ''}`}
+          aria-label={licht ? 'Licht ausschalten' : 'Licht einschalten'}
+          aria-pressed={licht}
+          onClick={() => {
+            const neu = !licht
+            lichtSchalten(strom.current, neu).then(() => setLicht(neu), () => setLichtGeht(false))
+          }}
+        >
+          <Icon name="licht" groesse={20} />
+        </button>
+      )}
       <button
         type="button"
         className="buehne-knopf"
