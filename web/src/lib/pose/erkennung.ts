@@ -50,7 +50,8 @@ export async function kameraStarten(video: HTMLVideoElement, richtung: Kamera): 
   try {
     strom = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: { ideal: richtung }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      // 4:3 wie der Kamerasensor: passt zur Fläche in der App, so wird kaum etwas abgeschnitten
+      video: { facingMode: { ideal: richtung }, width: { ideal: 1280 }, height: { ideal: 960 }, aspectRatio: { ideal: 4 / 3 } },
     })
   } catch (e) {
     const name = (e as { name?: string }).name
