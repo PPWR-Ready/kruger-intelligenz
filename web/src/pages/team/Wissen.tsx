@@ -273,8 +273,8 @@ export function TeamWissenEditor() {
       </header>
 
       {ablehnung !== null && <div className="karte kritisch klein"><strong>Abgelehnt.</strong> {ablehnung || 'Ohne Anmerkung.'} Überarbeite den Text und reiche ihn erneut ein.</div>}
-      {offeneFreigabe && <div className="karte warnung klein">Für diesen Eintrag liegt eine Änderung zur Freigabe bei den Gründern.</div>}
-      {!darfBearbeiten && <div className="karte warnung klein">Diesen Eintrag hat jemand anderes angelegt. Änderungen können nur die Gründer vornehmen.</div>}
+      {offeneFreigabe && <div className="karte warnung klein">Für diesen Eintrag liegt eine Änderung zur Freigabe bei den Admins.</div>}
+      {!darfBearbeiten && <div className="karte warnung klein">Diesen Eintrag hat jemand anderes angelegt. Änderungen können nur Admins vornehmen.</div>}
 
       <div className="zweispaltig">
         <div className="haupt stapel" style={{ gap: 16 }}>
@@ -345,7 +345,7 @@ export function TeamWissenEditor() {
               {s.istGruender ? 'Speichern und freigeben' : 'Zur Freigabe einreichen'}
             </button>
           )}
-          {!s.istGruender && darfBearbeiten && <p className="klein leise" style={{ margin: 0 }}>Die Gründer prüfen den Text, bevor der Assistent ihn nutzt.</p>}
+          {!s.istGruender && darfBearbeiten && <p className="klein leise" style={{ margin: 0 }}>Ein Admin prüft den Text, bevor der Assistent ihn nutzt.</p>}
           {s.istGruender && eintrag?.status === 'freigegeben' && <button className="knopf still voll" onClick={() => void archivieren()}>Archivieren</button>}
           {s.istGruender && eintrag?.status === 'archiviert' && eintrag.aktuelle_version_id && <button className="knopf voll" onClick={() => void wiederherstellen()}>Wieder freigeben</button>}
 

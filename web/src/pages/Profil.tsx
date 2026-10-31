@@ -90,7 +90,7 @@ export function Profil() {
           <input value={name} onChange={(e) => setName(e.target.value)} onBlur={nameSpeichern} maxLength={60} autoComplete="name" />
         </label>
         <p className="klein leise" style={{ margin: 0 }}>{s.session?.user.email}</p>
-        {s.profil?.rolle !== 'mitglied' && <span className="status neutral">{s.profil?.rolle === 'gruender' ? 'Gründer' : 'Trainer'}</span>}
+        {s.profil?.rolle !== 'mitglied' && <span className="status neutral">{s.profil?.rolle === 'gruender' ? 'Admin' : 'Trainer'}</span>}
       </section>
 
       {s.istTeam && (

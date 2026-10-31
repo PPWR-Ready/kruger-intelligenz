@@ -189,7 +189,7 @@ export function TeamUebungEditor() {
         {!neu && <span className={`status ${STATUS[status].klasse}`}>{STATUS[status].text}</span>}
       </header>
 
-      {!darfBearbeiten && <div className="karte warnung"><p className="klein" style={{ margin: 0 }}>Five-Übungen können nur Gründer ändern.</p></div>}
+      {!darfBearbeiten && <div className="karte warnung"><p className="klein" style={{ margin: 0 }}>Five-Übungen können nur Admins ändern.</p></div>}
 
       <div className="editor-raster" style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', alignItems: 'start' }}>
         <fieldset disabled={!darfBearbeiten} className="stapel" style={{ border: 0, padding: 0, margin: 0, gap: 16 }}>

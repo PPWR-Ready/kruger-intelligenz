@@ -50,7 +50,7 @@ export function TeamFreigaben() {
       <p className="klein leise" style={{ margin: 0, maxWidth: 720 }}>
         {s.istGruender
           ? 'Erst nach eurer Freigabe nutzt der Assistent einen Text. Prüft besonders medizinische Aussagen.'
-          : 'Die Gründer prüfen jeden Text, bevor der Assistent ihn nutzt.'}
+          : 'Ein Admin prüft jeden Text, bevor der Assistent ihn nutzt.'}
       </p>
       {!zeilen ? <Laden /> : zeilen.length === 0 ? (
         <div className="leer">Nichts offen.</div>
