@@ -1,0 +1,28 @@
+# Web-App hinter einem vorhandenen Traefik. Auf dem VPS unter /docker/kruger-app,
+# das Repo liegt dort als ./quelle (git clone … quelle).
+# Aktualisieren: ./aktualisieren.sh
+name: kruger-app
+
+services:
+  web:
+    build:
+      context: ./quelle
+      dockerfile: web/Dockerfile
+      args:
+        VITE_SUPABASE_URL: https://lqhkvxlxgatwuszxajrr.supabase.co
+        VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_tggB3cG3tvuJk9SeHmNvLQ_yHLcNQPp
+    image: kruger-web:latest
+    restart: unless-stopped
+    networks: [web]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.kruger-app.rule=Host(`kruger-app.srv1864263.hstgr.cloud`)
+      - traefik.http.routers.kruger-app.entrypoints=websecure
+      - traefik.http.routers.kruger-app.tls=true
+      - traefik.http.routers.kruger-app.tls.certresolver=mytlschallenge
+      - traefik.http.services.kruger-app.loadbalancer.server.port=80
+
+networks:
+  web:
+    external: true

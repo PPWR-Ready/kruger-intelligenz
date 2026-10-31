@@ -1,0 +1,55 @@
+# KI-Dienste (Qdrant + BGE-M3 über Infinity) hinter einem vorhandenen Traefik.
+# So läuft es auf dem Hostinger-VPS unter /docker/kruger-ki (Traefik kommt aus /docker/n8n:
+# Netz "web", Zertifikats-Resolver "mytlschallenge").
+#
+# Start:  .env mit QDRANT_API_KEY und EMBEDDING_API_KEY anlegen (openssl rand -hex 32), dann
+#         docker compose up -d
+name: kruger-ki
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.13.4
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY fehlt}
+    volumes:
+      - qdrant_daten:/qdrant/storage
+    networks: [web]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.kruger-qdrant.rule=Host(`kruger-qdrant.srv1864263.hstgr.cloud`)
+      - traefik.http.routers.kruger-qdrant.entrypoints=websecure
+      - traefik.http.routers.kruger-qdrant.tls=true
+      - traefik.http.routers.kruger-qdrant.tls.certresolver=mytlschallenge
+      - traefik.http.services.kruger-qdrant.loadbalancer.server.port=6333
+
+  embeddings:
+    image: michaelf34/infinity:latest-cpu
+    restart: unless-stopped
+    command: ["v2", "--model-id", "BAAI/bge-m3", "--engine", "torch", "--port", "7997"]
+    environment:
+      INFINITY_API_KEY: ${EMBEDDING_API_KEY:?EMBEDDING_API_KEY fehlt}
+    volumes:
+      - modell_cache:/app/.cache
+    networks: [web]
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.kruger-embed.rule=Host(`kruger-embed.srv1864263.hstgr.cloud`)
+      - traefik.http.routers.kruger-embed.entrypoints=websecure
+      - traefik.http.routers.kruger-embed.tls=true
+      - traefik.http.routers.kruger-embed.tls.certresolver=mytlschallenge
+      - traefik.http.services.kruger-embed.loadbalancer.server.port=7997
+
+networks:
+  web:
+    external: true
+
+volumes:
+  qdrant_daten:
+  modell_cache:
