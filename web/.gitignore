@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Pose-Modell wird beim Build geladen (scripts/modell-laden.mjs)
+public/mediapipe/

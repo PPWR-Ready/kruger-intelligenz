@@ -18,6 +18,10 @@ const TeamMitglieder = lazy(() => import('./pages/team/Mitglieder').then((m) => 
 const TeamWissen = lazy(() => import('./pages/team/Wissen').then((m) => ({ default: m.TeamWissen })))
 const TeamWissenEditor = lazy(() => import('./pages/team/Wissen').then((m) => ({ default: m.TeamWissenEditor })))
 const TeamFreigaben = lazy(() => import('./pages/team/Freigaben').then((m) => ({ default: m.TeamFreigaben })))
+const TeamUebungen = lazy(() => import('./pages/team/Uebungen').then((m) => ({ default: m.TeamUebungen })))
+const TeamUebungEditor = lazy(() => import('./pages/team/Uebungen').then((m) => ({ default: m.TeamUebungEditor })))
+// Trainer-Modus mit Kamera erst laden, wenn er gebraucht wird (Erkennung ist groß)
+const KameraTraining = lazy(() => import('./pages/KameraTraining').then((m) => ({ default: m.KameraTraining })))
 
 /** Wohin eine Person gehört, je nachdem wie weit sie ist. */
 function ziel(s: ReturnType<typeof useSitzung>): string {
@@ -88,6 +92,7 @@ export default function App() {
           <Route path="/profil" element={<Profil />} />
         </Route>
         <Route path="/profil/ziele" element={<UeberDichSchritt bearbeiten />} />
+        <Route path="/trainieren/:id" element={<Suspense fallback={<main className="trainer"><Laden /></main>}><KameraTraining /></Suspense>} />
       </Route>
 
       <Route element={<Geschuetzt stufe="team" />}>
@@ -97,6 +102,8 @@ export default function App() {
           <Route path="wissen" element={<TeamWissen />} />
           <Route path="wissen/:id" element={<TeamWissenEditor />} />
           <Route path="freigaben" element={<TeamFreigaben />} />
+          <Route path="uebungen" element={<TeamUebungen />} />
+          <Route path="uebungen/:id" element={<TeamUebungEditor />} />
           <Route path="mitglieder" element={<TeamMitglieder />} />
         </Route>
       </Route>

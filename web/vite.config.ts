@@ -1,11 +1,43 @@
+import { readFileSync, readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+// MediaPipe (Haltungserkennung im Trainer-Modus) liefern wir selbst aus, nicht
+// von einem CDN: Die WASM-Dateien kommen versioniert aus node_modules nach
+// /mediapipe/<version>/wasm/, das Modell lädt scripts/modell-laden.mjs nach public/.
+const MEDIAPIPE_DIR = resolve(import.meta.dirname, 'node_modules/@mediapipe/tasks-vision')
+const MEDIAPIPE_VERSION = JSON.parse(readFileSync(resolve(MEDIAPIPE_DIR, 'package.json'), 'utf8')).version as string
+const MEDIAPIPE_PFAD = `/mediapipe/${MEDIAPIPE_VERSION}/wasm/`
+
+function mediapipeWasm(): Plugin {
+  const wasmDir = resolve(MEDIAPIPE_DIR, 'wasm')
+  return {
+    name: 'mediapipe-wasm',
+    configureServer(server) {
+      server.middlewares.use(MEDIAPIPE_PFAD, (req, res, next) => {
+        const datei = (req.url ?? '').split('?')[0].replace(/^\//, '')
+        if (!readdirSync(wasmDir).includes(datei)) return next()
+        res.setHeader('Content-Type', datei.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
+        res.end(readFileSync(resolve(wasmDir, datei)))
+      })
+    },
+    generateBundle() {
+      for (const datei of readdirSync(wasmDir)) {
+        if (datei.includes('module_internal')) continue // ES-Modul-Variante nutzen wir nicht
+        this.emitFile({ type: 'asset', fileName: `${MEDIAPIPE_PFAD.slice(1)}${datei}`, source: readFileSync(resolve(wasmDir, datei)) })
+      }
+    },
+  }
+}
 
 // Web-App (PWA): installierbar auf Android und iOS („Zum Home-Bildschirm“).
 export default defineConfig({
+  define: { __MEDIAPIPE_PFAD__: JSON.stringify(MEDIAPIPE_PFAD) },
   plugins: [
     react(),
+    mediapipeWasm(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
@@ -28,11 +60,18 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // PDF-Leser nur bei Bedarf laden, nicht vorab cachen
-        globIgnores: ['**/pdf.worker*'],
+        // PDF-Leser und Haltungserkennung nur bei Bedarf laden, nicht vorab cachen
+        globIgnores: ['**/pdf.worker*', 'mediapipe/**'],
         navigateFallback: '/index.html',
         // Supabase-Anfragen (Daten, Login, Edge Functions) nie aus dem Cache
-        runtimeCaching: [],
+        runtimeCaching: [
+          // Haltungserkennung (~25 MB) nach dem ersten Start lokal behalten
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/mediapipe/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'mediapipe', expiration: { maxEntries: 10 }, cacheableResponse: { statuses: [200] } },
+          },
+        ],
       },
     }),
   ],

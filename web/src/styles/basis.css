@@ -176,3 +176,28 @@ h1, h2, h3 { margin: 0; }
 .leer { padding: 28px 18px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); }
 .mitteilung { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--surface-light); color: #121212; padding: 12px 18px; border-radius: var(--radius); font-size: 15px; font-weight: 500; z-index: 50; max-width: calc(100% - 32px); }
 @media (max-width: 640px) { .team-inhalt { padding: 20px 16px; } }
+
+/* Trainer-Modus: Livebild mit Skelett */
+.buehne { position: relative; width: 100%; aspect-ratio: 3 / 4; max-height: 62dvh; background: #000; border-radius: var(--radius); overflow: hidden; }
+.buehne video, .buehne canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.buehne video.gespiegelt { transform: scaleX(-1); }
+.buehne-hinweis { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; text-align: center; padding: 24px; background: rgba(0, 0, 0, 0.6); }
+.buehne-hinweis.fehler { color: var(--critical); }
+.buehne-knopf { position: absolute; right: 10px; top: 10px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(18, 18, 18, 0.75); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.trainer { max-width: 560px; margin: 0 auto; min-height: 100dvh; padding: 12px 14px 28px; display: flex; flex-direction: column; gap: 14px; }
+.trainer-kopf { display: flex; align-items: center; gap: 10px; }
+.trainer-kopf h1 { font-size: 20px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zaehlwerk { display: flex; align-items: baseline; gap: 10px; }
+.zaehlwerk .zahl { font-family: var(--font-display); font-weight: 700; font-size: 64px; line-height: 0.9; }
+.meldung { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--radius); font-size: 19px; font-weight: 600; }
+.meldung.fehler { background: var(--critical-tint); color: var(--critical); border: 1px solid var(--critical); }
+.meldung.ruhig { background: var(--surface); color: var(--muted); border: 1px solid var(--line); font-weight: 500; font-size: 16px; }
+.wdh-punkte { display: flex; flex-wrap: wrap; gap: 6px; }
+.wdh-punkte span { width: 14px; height: 14px; border-radius: 50%; }
+.wdh-punkte .sauber { background: var(--success); }
+.wdh-punkte .anpassen { background: var(--warning); }
+.knopfreihe { display: flex; gap: 8px; flex-wrap: wrap; }
+.knopfreihe .knopf { flex: 1; }
+.winkel-tabelle { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.winkel-tabelle div { background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 8px 10px; }
+.winkel-tabelle b { font-family: var(--font-display); font-size: 26px; display: block; }
