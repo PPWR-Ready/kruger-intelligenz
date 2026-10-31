@@ -1,5 +1,5 @@
 // Anmeldung, Profil und Einwilligungen der angemeldeten Person.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import type { Einwilligung, EinwilligungArt, Profil } from './db'
@@ -40,6 +40,7 @@ export function SitzungProvider({ children }: { children: ReactNode }) {
   const [profil, setProfil] = useState<Profil | null>(null)
   const [einwilligungen, setEinwilligungen] = useState<Partial<Record<EinwilligungArt, boolean>>>({})
   const [hatEinwilligungen, setHatEinwilligungen] = useState(false)
+  const geladenFuer = useRef<string | null | undefined>(undefined)
 
   const ladeDaten = useCallback(async (s: Session | null) => {
     if (!s) {
@@ -78,13 +79,19 @@ export function SitzungProvider({ children }: { children: ReactNode }) {
       if (!aktiv) return
       setSession(data.session)
       await ladeDaten(data.session)
+      geladenFuer.current = data.session?.user.id ?? null
       if (aktiv) setLaedt(false)
     })
     const { data: abo } = supabase.auth.onAuthStateChange((ereignis, s) => {
       setSession(s)
       if (ereignis === 'SIGNED_IN' || ereignis === 'SIGNED_OUT' || ereignis === 'USER_UPDATED') {
-        // außerhalb des Callbacks laden, damit Supabase nicht blockiert
-        setTimeout(() => { void ladeDaten(s) }, 0)
+        const neuePerson = (s?.user.id ?? null) !== geladenFuer.current
+        // außerhalb des Callbacks laden, damit Supabase nicht blockiert.
+        // Nur bei Personenwechsel den Ladezustand zeigen (SIGNED_IN kommt auch beim Zurückkehren in den Tab).
+        setTimeout(() => {
+          if (neuePerson) setLaedt(true)
+          void ladeDaten(s).finally(() => { geladenFuer.current = s?.user.id ?? null; setLaedt(false) })
+        }, 0)
       }
     })
     return () => {

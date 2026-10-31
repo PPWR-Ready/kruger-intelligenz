@@ -86,7 +86,7 @@ export function Skala({ wert, beiWahl }: { wert: number | null; beiWahl: (w: num
 }
 
 /** Linienverlauf für Wochenwerte (0–10), leere Wochen werden übersprungen. */
-export function Verlauf({ werte, beschriftung }: { werte: (number | null)[]; beschriftung: string }) {
+export function Verlauf({ werte, beschriftung, farbe = 'var(--success)' }: { werte: (number | null)[]; beschriftung: string; farbe?: string }) {
   const b = 320, h = 120, rand = 8
   const x = (i: number) => rand + (i * (b - 2 * rand)) / Math.max(1, werte.length - 1)
   const y = (w: number) => h - rand - (w / 10) * (h - 2 * rand)
@@ -96,8 +96,8 @@ export function Verlauf({ werte, beschriftung }: { werte: (number | null)[]; bes
   return (
     <svg viewBox={`0 0 ${b} ${h}`} width="100%" height={h} role="img" aria-label={beschriftung} preserveAspectRatio="none">
       {[0, 5, 10].map((g) => <line key={g} x1={0} x2={b} y1={y(g)} y2={y(g)} stroke="var(--line)" strokeWidth={1} />)}
-      {punkte.length > 1 && <path d={pfad} fill="none" stroke="var(--success)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-      {letzter && <circle cx={letzter[0]} cy={letzter[1]} r={5} fill="var(--success)" />}
+      {punkte.length > 1 && <path d={pfad} fill="none" stroke={farbe} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+      {letzter && <circle cx={letzter[0]} cy={letzter[1]} r={5} fill={farbe} />}
     </svg>
   )
 }

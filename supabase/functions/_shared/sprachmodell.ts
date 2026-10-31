@@ -9,9 +9,30 @@
 import { env, envOptional } from './umgebung.ts'
 import { liesSse } from './sse.ts'
 
+/** Teil einer Nachricht: Text oder Bild (z. B. ein gescanntes Dokument). */
+export type Teil = { typ: 'text'; text: string } | { typ: 'bild'; mime: string; base64: string }
+
 export interface Nachricht {
   role: 'user' | 'assistant'
-  content: string
+  content: string | Teil[]
+}
+
+function alsAnthropic(n: Nachricht) {
+  if (typeof n.content === 'string') return n
+  return {
+    role: n.role,
+    content: n.content.map((t) =>
+      t.typ === 'text' ? { type: 'text', text: t.text } : { type: 'image', source: { type: 'base64', media_type: t.mime, data: t.base64 } }),
+  }
+}
+
+function alsOpenAi(n: Nachricht) {
+  if (typeof n.content === 'string') return n
+  return {
+    role: n.role,
+    content: n.content.map((t) =>
+      t.typ === 'text' ? { type: 'text', text: t.text } : { type: 'image_url', image_url: { url: `data:${t.mime};base64,${t.base64}` } }),
+  }
 }
 
 export interface Anfrage {
@@ -47,7 +68,7 @@ async function* streameAnthropic(a: Anfrage): AsyncGenerator<string> {
     model: modell(),
     max_tokens: a.maxTokens ?? 1500,
     system: a.system,
-    messages: a.nachrichten,
+    messages: a.nachrichten.map(alsAnthropic),
     stream: true,
   }
   if (aufwand) body.output_config = { effort: aufwand }
@@ -87,7 +108,7 @@ async function* streameOpenAi(a: Anfrage): AsyncGenerator<string> {
       model: modell(),
       max_tokens: a.maxTokens ?? 1500,
       stream: true,
-      messages: [{ role: 'system', content: a.system }, ...a.nachrichten],
+      messages: [{ role: 'system', content: a.system }, ...a.nachrichten.map(alsOpenAi)],
     }),
   })
   if (!antwort.ok || !antwort.body) {

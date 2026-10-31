@@ -141,6 +141,7 @@ export interface Einladungscode {
   gueltig_bis: string | null
   max_nutzungen: number
   genutzt: number
+  rolle: Rolle
   created_at: string
 }
 

@@ -21,7 +21,12 @@ export async function frageStellen(
   eingabe: { frage: string; verlauf_id?: string | null; kontext?: 'chat' | 'trainer_modus'; uebung?: string },
   r: ChatRueckrufe,
 ): Promise<void> {
-  const antwort = await funktion('chat', eingabe)
+  let antwort: Response
+  try {
+    antwort = await funktion('chat', eingabe)
+  } catch {
+    throw new Error('Der Assistent ist gerade nicht erreichbar. Prüfe deine Internetverbindung und versuch es gleich noch einmal.')
+  }
   if (!antwort.ok || !antwort.body) {
     let nachricht = 'Der Assistent ist gerade nicht erreichbar.'
     try {
@@ -39,6 +44,6 @@ export async function frageStellen(
 }
 
 export async function anTeamWeitergeben(nachrichtId: string): Promise<void> {
-  const antwort = await funktion('chat', { aktion: 'rueckfrage', nachricht_id: nachrichtId })
-  if (!antwort.ok) throw new Error((await antwort.json()).fehler ?? 'Weitergeben hat nicht geklappt.')
+  const antwort = await funktion('chat', { aktion: 'rueckfrage', nachricht_id: nachrichtId }).catch(() => null)
+  if (!antwort?.ok) throw new Error((await antwort?.json().catch(() => null))?.fehler ?? 'Weitergeben hat nicht geklappt. Versuch es gleich noch einmal.')
 }

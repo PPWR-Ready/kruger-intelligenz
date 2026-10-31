@@ -104,3 +104,36 @@ Deno.test('OpenAI-kompatibel: eigenes Modell über Basis-URL', async () => {
     Deno.env.delete('LLM_MODELL')
   }
 })
+
+Deno.test('Bilder: werden je Anbieter im richtigen Format übergeben', async () => {
+  const teile = [{ typ: 'text' as const, text: 'Seite 1:' }, { typ: 'bild' as const, mime: 'image/jpeg', base64: 'QUJD' }]
+  const leer = () => sseAntwort(['data: {"type":"message_stop"}', ''])
+
+  Deno.env.set('LLM_ANBIETER', 'anthropic')
+  Deno.env.set('ANTHROPIC_API_KEY', 'test')
+  Deno.env.delete('LLM_AUFWAND')
+  let body: { messages: { content: unknown }[] } = { messages: [] }
+  let zurueck = mitFetch(leer, (_u, init) => { body = JSON.parse(String(init.body)) })
+  try {
+    await antworte({ system: 'S', nachrichten: [{ role: 'user', content: teile }] })
+    assertEquals(body.messages[0].content, [
+      { type: 'text', text: 'Seite 1:' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'QUJD' } },
+    ])
+  } finally { zurueck() }
+
+  Deno.env.set('LLM_ANBIETER', 'openai')
+  Deno.env.set('LLM_BASIS_URL', 'http://gpu:8000/v1')
+  Deno.env.set('LLM_MODELL', 'eigenes-modell')
+  zurueck = mitFetch(() => sseAntwort(['data: [DONE]', '']), (_u, init) => { body = JSON.parse(String(init.body)) })
+  try {
+    await antworte({ system: 'S', nachrichten: [{ role: 'user', content: teile }] })
+    assertEquals(body.messages[1].content, [
+      { type: 'text', text: 'Seite 1:' },
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,QUJD' } },
+    ])
+  } finally {
+    zurueck()
+    Deno.env.delete('LLM_ANBIETER'); Deno.env.delete('LLM_BASIS_URL'); Deno.env.delete('LLM_MODELL')
+  }
+})

@@ -40,7 +40,8 @@ export function Willkommen() {
 
 /* ------------------------------------------------------------ 2 Registrieren */
 export function Registrieren() {
-  const [code, setCode] = useState('')
+  const ort = useLocation()
+  const [code, setCode] = useState(() => (new URLSearchParams(ort.search).get('code') ?? '').toUpperCase())
   const [name, setName] = useState('')
   const [mail, setMail] = useState('')
   const [passwort, setPasswort] = useState('')

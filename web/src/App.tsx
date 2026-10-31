@@ -1,122 +1,107 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { lazy, Suspense, type ReactNode } from 'react'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { useSitzung } from './lib/sitzung'
+import { Laden } from './components/Bausteine'
+import { TabLeiste } from './components/TabLeiste'
+import { Anmelden, CodeEinloesen, DatenschutzSchritt, ErsteFrage, PasswortNeu, Registrieren, UeberDichSchritt, Willkommen } from './pages/Onboarding'
+import { Heute } from './pages/Heute'
+import { Assistent } from './pages/Assistent'
+import { Trainieren } from './pages/Trainieren'
+import { EinheitErfassen, Fortschritt } from './pages/Fortschritt'
+import { Profil } from './pages/Profil'
 
-function App() {
-  const [count, setCount] = useState(0)
+// Team-Bereich nur bei Bedarf laden, damit die App für Mitglieder schlank bleibt
+const TeamLayout = lazy(() => import('./pages/team/Layout').then((m) => ({ default: m.TeamLayout })))
+const TeamUebersicht = lazy(() => import('./pages/team/Uebersicht').then((m) => ({ default: m.TeamUebersicht })))
+const TeamRueckfragen = lazy(() => import('./pages/team/Rueckfragen').then((m) => ({ default: m.TeamRueckfragen })))
+const TeamMitglieder = lazy(() => import('./pages/team/Mitglieder').then((m) => ({ default: m.TeamMitglieder })))
+const TeamWissen = lazy(() => import('./pages/team/Wissen').then((m) => ({ default: m.TeamWissen })))
+const TeamWissenEditor = lazy(() => import('./pages/team/Wissen').then((m) => ({ default: m.TeamWissenEditor })))
+const TeamFreigaben = lazy(() => import('./pages/team/Freigaben').then((m) => ({ default: m.TeamFreigaben })))
 
+/** Wohin eine Person gehört, je nachdem wie weit sie ist. */
+function ziel(s: ReturnType<typeof useSitzung>): string {
+  if (!s.session) return '/willkommen'
+  if (!s.profil) return '/zugang'
+  if (!s.onboardingFertig) return '/start/ueber-dich'
+  return '/heute'
+}
+
+/** Nur ohne Anmeldung (Willkommen, Registrieren, Anmelden). */
+function Oeffentlich({ children }: { children: ReactNode }) {
+  const s = useSitzung()
+  return s.session ? <Navigate to={ziel(s)} replace /> : <>{children}</>
+}
+
+/** Angemeldet; stufe bestimmt, wie weit die Einrichtung schon sein muss. */
+function Geschuetzt({ stufe }: { stufe: 'konto' | 'profil' | 'fertig' | 'team' }) {
+  const s = useSitzung()
+  const ort = useLocation()
+  if (!s.session) return <Navigate to="/anmelden" replace state={{ von: ort.pathname }} />
+  if (stufe === 'konto') return s.profil ? <Navigate to={ziel(s)} replace /> : <Outlet />
+  if (!s.profil) return <Navigate to="/zugang" replace />
+  if (stufe === 'profil') return <Outlet />
+  if (!s.onboardingFertig) return <Navigate to="/start/ueber-dich" replace />
+  if (stufe === 'team' && !s.istTeam) return <Navigate to="/heute" replace />
+  return <Outlet />
+}
+
+function MitgliedRahmen() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <main className="mitglied">
+      <Outlet />
+      <TabLeiste />
+    </main>
   )
 }
 
-export default App
+export default function App() {
+  const s = useSitzung()
+  if (s.laedt) return <main className="mitglied"><Laden text="Rückgrat wird geladen …" /></main>
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to={ziel(s)} replace />} />
+      <Route path="/willkommen" element={<Oeffentlich><Willkommen /></Oeffentlich>} />
+      <Route path="/registrieren" element={<Oeffentlich><Registrieren /></Oeffentlich>} />
+      <Route path="/anmelden" element={<Oeffentlich><Anmelden /></Oeffentlich>} />
+      {/* Link aus der Passwort-E-Mail meldet kurzzeitig an, daher ohne Schutz */}
+      <Route path="/passwort-neu" element={<PasswortNeu />} />
+
+      <Route element={<Geschuetzt stufe="konto" />}>
+        <Route path="/zugang" element={<CodeEinloesen />} />
+      </Route>
+
+      <Route element={<Geschuetzt stufe="profil" />}>
+        <Route path="/start/ueber-dich" element={<UeberDichSchritt />} />
+        <Route path="/start/datenschutz" element={<DatenschutzSchritt />} />
+        <Route path="/start/erste-frage" element={<ErsteFrage />} />
+      </Route>
+
+      <Route element={<Geschuetzt stufe="fertig" />}>
+        <Route element={<MitgliedRahmen />}>
+          <Route path="/heute" element={<Heute />} />
+          <Route path="/assistent" element={<Assistent />} />
+          <Route path="/trainieren" element={<Trainieren />} />
+          <Route path="/fortschritt" element={<Fortschritt />} />
+          <Route path="/fortschritt/neu" element={<EinheitErfassen />} />
+          <Route path="/profil" element={<Profil />} />
+        </Route>
+        <Route path="/profil/ziele" element={<UeberDichSchritt bearbeiten />} />
+      </Route>
+
+      <Route element={<Geschuetzt stufe="team" />}>
+        <Route path="/team" element={<Suspense fallback={<Laden />}><TeamLayout /></Suspense>}>
+          <Route index element={<TeamUebersicht />} />
+          <Route path="rueckfragen" element={<TeamRueckfragen />} />
+          <Route path="wissen" element={<TeamWissen />} />
+          <Route path="wissen/:id" element={<TeamWissenEditor />} />
+          <Route path="freigaben" element={<TeamFreigaben />} />
+          <Route path="mitglieder" element={<TeamMitglieder />} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}

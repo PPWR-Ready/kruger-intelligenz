@@ -41,7 +41,8 @@ insert into auth.users (id) values
   ('44444444-4444-4444-4444-444444444444'), -- g1 Gründer
   ('55555555-5555-5555-5555-555555555555'), -- x  Trainer anderes Studio
   ('66666666-6666-6666-6666-666666666666'), -- n1 neu, löst Code ein
-  ('77777777-7777-7777-7777-777777777777'); -- n2 neu, Code verbraucht
+  ('77777777-7777-7777-7777-777777777777'), -- n2 neu, Code verbraucht
+  ('88888888-8888-8888-8888-888888888888'); -- n3 neu, löst Team-Code ein
 
 insert into profiles (id, studio_id, rolle, anzeigename, freigeschaltet) values
   ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-0000000000a1', 'mitglied', 'Sabine M.', true),
@@ -65,6 +66,19 @@ select pruefe((select studio_id from code_einloesen(' rg-test1 ', 'Neue Person')
 select pruefe((select not freigeschaltet from profiles where id = auth.uid()), 'neues Profil ist noch nicht freigeschaltet');
 select als('77777777-7777-7777-7777-777777777777');
 select muss_scheitern($$select code_einloesen('RG-TEST1', 'Zweite Person')$$, 'verbrauchter Code');
+
+-- Team-Codes: nur Gründer erstellen sie, Einlösen schaltet sofort frei
+select als('33333333-3333-3333-3333-333333333333');
+select muss_scheitern($$insert into einladungscodes (code, studio_id, rolle) values ('RG-TRAINER1', '00000000-0000-0000-0000-0000000000a1', 'trainer')$$,
+                      'Trainer erstellt keinen Team-Code');
+insert into einladungscodes (code, studio_id, erstellt_von) values ('RG-MITGLIED2', '00000000-0000-0000-0000-0000000000a1', '33333333-3333-3333-3333-333333333333');
+select pruefe(true, 'Trainer erstellt Mitglieder-Code');
+select muss_scheitern($$update einladungscodes set rolle = 'gruender' where code = 'RG-MITGLIED2'$$, 'Trainer macht Code nicht zum Gründer-Code');
+select als('44444444-4444-4444-4444-444444444444');
+insert into einladungscodes (code, studio_id, rolle, erstellt_von) values ('RG-TEAM1', '00000000-0000-0000-0000-0000000000a1', 'trainer', '44444444-4444-4444-4444-444444444444');
+select als('88888888-8888-8888-8888-888888888888');
+select pruefe((select rolle = 'trainer' and freigeschaltet and freigeschaltet_von = '44444444-4444-4444-4444-444444444444'
+                 from code_einloesen('RG-TEAM1', 'Neue Trainerin')), 'Team-Code: Rolle Trainer, sofort freigeschaltet');
 
 -- 2. Mitglied trainiert --------------------------------------------------
 select als('11111111-1111-1111-1111-111111111111');
