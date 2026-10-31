@@ -8,6 +8,14 @@ interface Muster {
   ausdruecke: RegExp[]
 }
 
+// Akute Notfälle: Hier zählt nur eins – sofort aufhören und 112 anrufen.
+const NOTFALL: RegExp[] = [
+  /brustschmerz/, /schmerz.*in der brust/, /(sticht|stiche|drueckt|brennt|zieht|eng) in der brust\b/, /\bbrust\b.*(schmerz|druck|stech|eng|tut weh)/, /(druck|stechen|enge|engegefuehl) (auf|in) der brust/,
+  /atemnot/, /keine luft/, /(kaum|schlecht|schwer) luft/, /luft (kriege|bekomme)/, /herzrasen/, /herz (rast|stolpert)/,
+  /ohnmacht/, /ohnmaechtig/, /bewusstlos/, /umgekippt/, /(gesicht|mundwinkel).*(haengt|schief)/, /sprachstoerung/, /kann nicht (mehr )?(richtig )?sprechen/,
+  /schwindel.*(brust|herz|luft)/, /(brust|herz|luft).*schwindel/,
+]
+
 const MUSTER: Muster[] = [
   {
     grund: 'Taubheit oder Kribbeln',
@@ -19,7 +27,7 @@ const MUSTER: Muster[] = [
   },
   {
     grund: 'Probleme mit Blase oder Darm',
-    ausdruecke: [/blase/, /inkontinen/, /urin.*(halten|verlier)/, /stuhl.*(halten|verlier)/, /reithose/, /im schritt.*taub/],
+    ausdruecke: [/harnblase/, /\bblase\b/, /blasenschwaech/, /inkontinen/, /urin.*(halten|verlier)/, /stuhl.*(halten|verlier)/, /reithose/, /im schritt.*taub/],
   },
   {
     grund: 'Unfall oder Sturz',
@@ -27,11 +35,11 @@ const MUSTER: Muster[] = [
   },
   {
     grund: 'Fieber oder allgemeines Krankheitsgefühl',
-    ausdruecke: [/fieber/, /schuettelfrost/, /nachtschweiss/],
+    ausdruecke: [/\bfieber/, /schuettelfrost/, /nachtschweiss/],
   },
   {
     grund: 'Brustschmerz oder Atemnot',
-    ausdruecke: [/brustschmerz/, /schmerz.*in der brust/, /druck auf der brust/, /atemnot/, /keine luft/],
+    ausdruecke: [/brustschmerz/, /schmerz.*in der brust/, /(sticht|stiche|drueckt|brennt|zieht|eng) in der brust\b/, /druck auf der brust/, /atemnot/, /keine luft/],
   },
   {
     grund: 'Starke Schmerzen in Ruhe oder nachts',
@@ -55,11 +63,18 @@ export function normalisiere(text: string): string {
     .replace(/\s+/g, ' ')
 }
 
-export function pruefeWarnsignale(text: string): { treffer: boolean; gruende: string[] } {
+export function pruefeWarnsignale(text: string): { treffer: boolean; notfall: boolean; gruende: string[] } {
   const t = normalisiere(text)
+  const notfall = NOTFALL.some((a) => a.test(t))
   const gruende = MUSTER.filter((m) => m.ausdruecke.some((a) => a.test(t))).map((m) => m.grund)
-  return { treffer: gruende.length > 0, gruende }
+  if (notfall && !gruende.includes('Brustschmerz oder Atemnot')) gruende.unshift('Möglicher Notfall')
+  return { treffer: notfall || gruende.length > 0, notfall, gruende }
 }
+
+export const NOTFALLHINWEIS =
+  '**Bitte hör sofort mit dem Training auf.** Brustschmerz, Druck oder Enge in der Brust, Atemnot, Herzrasen mit Schwindel ' +
+  'oder Ohnmacht können ein Notfall sein. **Ruf den Notruf 112** oder sag sofort jemandem im Studio Bescheid. ' +
+  'Warte nicht auf eine Antwort hier in der App.'
 
 export const WARNHINWEIS =
   'Wichtig: Was du beschreibst, solltest du ärztlich abklären lassen, bevor du weitertrainierst. ' +

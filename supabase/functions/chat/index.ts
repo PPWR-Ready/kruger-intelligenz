@@ -18,7 +18,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { adminClient, angemeldetePerson, CORS, envOptional, fehler, json, KonfigFehler } from '../_shared/umgebung.ts'
-import { pruefeWarnsignale, WARNHINWEIS } from '../_shared/warnsignale.ts'
+import { NOTFALLHINWEIS, pruefeWarnsignale, WARNHINWEIS } from '../_shared/warnsignale.ts'
 import { baueSmalltalkAnweisung, baueSystemanweisung, ordneVerlauf, type Quelle } from '../_shared/systemanweisung.ts'
 import { META_ANFANG, MetaSplitter, liesMeta } from '../_shared/meta.ts'
 import { sseZeile } from '../_shared/sse.ts'
@@ -112,13 +112,26 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
   // Erst einrichten prüfen und Wissen suchen, dann speichern – so bleiben bei
   // fehlender Einrichtung keine unbeantworteten Fragen im Verlauf zurück.
   pruefeSprachmodell()
-  const [vektor] = await einbetten([frage])
-  const treffer = await suchen(
-    vektor,
-    { studioId: profil.studio_id, sichtbarkeiten },
-    Number(envOptional('SUCHE_ANZAHL') ?? '6'),
-    Number(envOptional('SUCHE_MINDESTSCORE') ?? '0.5'),
-  )
+  // Fällt die Suche aus (Embedding-Server, Qdrant), antwortet der Assistent trotzdem –
+  // dann eben ohne Wissen: Smalltalk selbst, Fachfragen gehen ans Team.
+  let treffer: Awaited<ReturnType<typeof suchen>> = []
+  try {
+    // Kurze Folgefragen („Und wie oft?“) mit der vorigen Frage zusammen suchen
+    const { data: vorige } = typeof body.verlauf_id === 'string' && frage.length < 60
+      ? await admin.from('chat_nachrichten').select('inhalt, chat_verlaeufe!inner(mitglied_id)').eq('verlauf_id', body.verlauf_id)
+          .eq('chat_verlaeufe.mitglied_id', profil.id).eq('rolle', 'mitglied').order('created_at', { ascending: false }).limit(1).maybeSingle()
+      : { data: null }
+    const suchtext = vorige?.inhalt ? `${vorige.inhalt}\n${frage}` : frage
+    const [vektor] = await einbetten([suchtext])
+    treffer = await suchen(
+      vektor,
+      { studioId: profil.studio_id, sichtbarkeiten },
+      Number(envOptional('SUCHE_ANZAHL') ?? '6'),
+      Number(envOptional('SUCHE_MINDESTSCORE') ?? '0.5'),
+    )
+  } catch (e) {
+    console.error('Wissenssuche fehlgeschlagen, weiter ohne Wissen', e)
+  }
 
   // Verlauf
   let verlaufId = typeof body.verlauf_id === 'string' ? body.verlauf_id : ''
@@ -200,13 +213,16 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
     const nachrichten = ordneVerlauf(verlauf as { rolle: 'mitglied' | 'assistent' | 'trainer'; inhalt: string }[], frage)
     return sse(async (schreibe) => {
       const weitergeben = async () => {
-        await admin.from('rueckfragen').insert({
+        const { error: rfFehler } = await admin.from('rueckfragen').insert({
           studio_id: profil.studio_id,
           mitglied_id: profil.id,
           nachricht_id: frageNachricht.id,
           frage,
         })
-        const text = warn.treffer ? `${KEIN_WISSEN}\n\n${WARNHINWEIS}` : KEIN_WISSEN
+        if (rfFehler) throw rfFehler
+        const text = warn.notfall
+          ? `${NOTFALLHINWEIS}\n\nIch gebe deine Nachricht zusätzlich an das Team weiter.`
+          : warn.treffer ? `${KEIN_WISSEN}\n\n${WARNHINWEIS}` : KEIN_WISSEN
         schreibe({ typ: 'text', t: text })
         const { data: antwort } = await admin
           .from('chat_nachrichten')
@@ -222,7 +238,7 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
         roh = await antworte({
           system: baueSmalltalkAnweisung({ vorname: profil.anzeigename.split(' ')[0], studioName: studio?.name ?? 'deinem Studio', kontext }),
           nachrichten,
-          maxTokens: 300,
+          maxTokens: 1024,
         })
       } catch (e) {
         console.error('Smalltalk-Antwort fehlgeschlagen', e)
@@ -264,20 +280,22 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
   const nachrichten = ordneVerlauf(verlauf as { rolle: 'mitglied' | 'assistent' | 'trainer'; inhalt: string }[], frage)
 
   return sse(async (schreibe) => {
+    if (warn.notfall) schreibe({ typ: 'text', t: `${NOTFALLHINWEIS}\n\n` })
     const splitter = new MetaSplitter()
-    for await (const stueck of streameAntwort({ system, nachrichten, maxTokens: kontext === 'trainer_modus' ? 600 : 1500 })) {
+    for await (const stueck of streameAntwort({ system, nachrichten, maxTokens: kontext === 'trainer_modus' ? 1000 : 2500 })) {
       const sichtbar = splitter.push(stueck)
       if (sichtbar) schreibe({ typ: 'text', t: sichtbar })
     }
     const { rest, text, meta } = splitter.ende()
     if (rest) schreibe({ typ: 'text', t: rest })
 
-    let inhalt = text
-    if (warn.treffer) {
+    let inhalt = warn.notfall ? `${NOTFALLHINWEIS}\n\n${text}` : text
+    if (warn.treffer && !warn.notfall) {
       schreibe({ typ: 'text', t: `\n\n${WARNHINWEIS}` })
       inhalt = `${text}\n\n${WARNHINWEIS}`
     }
-    const unsicher = meta?.unsicher === true || !text
+    // Ohne META-Zeile (z. B. abgeschnitten) gilt die Antwort als unsicher
+    const unsicher = !meta || meta.unsicher === true || !text
     const genutzt = new Map<string, { eintrag_id: string; titel: string }>()
     for (const nr of meta?.quellen ?? []) {
       const q = quellen.find((x) => x.nr === nr)

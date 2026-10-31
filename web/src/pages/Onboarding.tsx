@@ -329,7 +329,7 @@ export function DatenschutzSchritt() {
         <h1 className="display display-l">Deine Daten bleiben deine.</h1>
         <div className="karte"><Schalter an={werte.gesundheitsdaten} beiAenderung={setze('gesundheitsdaten')} titel="Gesundheitsangaben nutzen" text="Ziele, Beschwerden und Befinden, damit Antworten und Pläne zu dir passen." /></div>
         <div className="karte"><Schalter an={werte.kamera} beiAenderung={setze('kamera')} titel="Kamera für den Trainer-Modus" text="Das Bild bleibt auf deinem Gerät. Gespeichert werden nur Skelett und Winkel." /></div>
-        <div className="karte"><Schalter an={werte.trainer_freigabe} beiAenderung={setze('trainer_freigabe')} titel="Trainer darf Fortschritt sehen" text="So kann dich das Team gezielt betreuen. Deine Chats sieht niemand." /></div>
+        <div className="karte"><Schalter an={werte.trainer_freigabe} beiAenderung={setze('trainer_freigabe')} titel="Trainer darf Fortschritt sehen" text="So kann dich das Team gezielt betreuen. Deine Chats liest das Team nur, wenn eine Frage an das Team weitergegeben wird." /></div>
         <p className="klein leise" style={{ margin: 0 }}>Alles freiwillig und jederzeit im Profil änderbar. <a href={DATENSCHUTZ_URL} target="_blank" rel="noreferrer">Datenschutzerklärung lesen</a></p>
         <Fehler text={fehler} />
         <div className="unten">

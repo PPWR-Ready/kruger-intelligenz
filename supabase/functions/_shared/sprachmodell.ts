@@ -70,7 +70,8 @@ export async function antworte(anfrage: Anfrage): Promise<string> {
 }
 
 async function* streameAnthropic(a: Anfrage): AsyncGenerator<string> {
-  const aufwand = envOptional('LLM_AUFWAND')
+  // Standard „low“: schnelle, knappe Antworten; Denken zählt sonst gegen max_tokens
+  const aufwand = envOptional('LLM_AUFWAND') ?? 'low'
   const body: Record<string, unknown> = {
     model: modell(),
     max_tokens: a.maxTokens ?? 1500,
@@ -88,6 +89,7 @@ async function* streameAnthropic(a: Anfrage): AsyncGenerator<string> {
       'content-type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(90_000),
   })
   if (!antwort.ok || !antwort.body) {
     throw new Error(`Claude API ${antwort.status}: ${(await antwort.text()).slice(0, 300)}`)

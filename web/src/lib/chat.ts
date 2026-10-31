@@ -34,13 +34,20 @@ export async function frageStellen(
     } catch { /* keine JSON-Antwort */ }
     throw new Error(nachricht)
   }
-  for await (const e of liesSse(antwort.body)) {
-    const d = JSON.parse(e.data)
-    if (d.typ === 'start') r.beimStart?.(d.verlauf_id)
-    else if (d.typ === 'text') r.beimText(d.t)
-    else if (d.typ === 'ende') r.beimEnde(d as ChatEnde)
-    else if (d.typ === 'fehler') throw new Error(d.nachricht)
+  let fertig = false
+  try {
+    for await (const e of liesSse(antwort.body)) {
+      const d = JSON.parse(e.data)
+      if (d.typ === 'start') r.beimStart?.(d.verlauf_id)
+      else if (d.typ === 'text') r.beimText(d.t)
+      else if (d.typ === 'ende') { fertig = true; r.beimEnde(d as ChatEnde) }
+      else if (d.typ === 'fehler') throw new Error(d.nachricht)
+    }
+  } catch (e) {
+    if (e instanceof Error && !(e instanceof SyntaxError) && e.message && !/network|fetch|abort/i.test(e.message)) throw e
+    throw new Error('Die Verbindung ist abgebrochen. Bitte versuch es noch einmal.')
   }
+  if (!fertig) throw new Error('Die Verbindung ist abgebrochen. Bitte versuch es noch einmal.')
 }
 
 export async function anTeamWeitergeben(nachrichtId: string): Promise<void> {
