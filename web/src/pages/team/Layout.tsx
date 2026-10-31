@@ -40,6 +40,7 @@ export function TeamLayout() {
           <NavLink to="/team" end><Icon name="team" groesse={20} />Übersicht</NavLink>
           <NavLink to="/team/rueckfragen"><Icon name="chat" groesse={20} />Rückfragen{zahl(z.rueckfragen)}</NavLink>
           <NavLink to="/team/wissen"><Icon name="buch" groesse={20} />Wissen</NavLink>
+          <NavLink to="/team/uebungen"><Icon name="kamera" groesse={20} />Übungen</NavLink>
           <NavLink to="/team/freigaben"><Icon name="freigabe" groesse={20} />Freigaben{zahl(z.freigaben)}</NavLink>
           <NavLink to="/team/mitglieder"><Icon name="profil" groesse={20} />Mitglieder{zahl(z.neue)}</NavLink>
         </nav>

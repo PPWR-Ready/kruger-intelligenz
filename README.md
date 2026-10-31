@@ -90,6 +90,16 @@ Alternativ jede Hosting-Plattform für statische Seiten (Netlify, Vercel, Cloudf
 2. Wer den Gründer-Code einlöst, ist sofort freigeschaltet und hat den Team-Bereich (Profil → *Team-Bereich öffnen*).
 3. Im Team-Bereich unter *Mitglieder* Codes für Trainer (nur Gründer) und Mitglieder erstellen; der Link führt direkt zur Registrierung mit eingetragenem Code.
 
+## Trainer-Modus (Kamera-Coaching)
+
+- **Erkennung:** MediaPipe Pose (`@mediapipe/tasks-vision`, Modell `pose_landmarker_full`) läuft komplett im Browser. Das Kamerabild verlässt das Gerät nie; gespeichert werden nur Wiederholungen, Haltedauer, Bewertung und erkannte Korrekturen mit Winkel (`saetze`).
+- **Selbst ausgeliefert:** WASM-Dateien kommen aus `node_modules` nach `/mediapipe/<version>/wasm/`, das Modell lädt `web/scripts/modell-laden.mjs` beim Build (mit SHA-256-Prüfung) nach `public/mediapipe/`. Im Betrieb gibt es keine Abrufe bei Google. Nach dem ersten Start liegt alles im Cache des Geräts.
+- **Regeln je Übung** (`uebungen.regeln`, Logik in `web/src/lib/pose/regeln.ts`): zählendes Gelenk mit Ausgangs- und Umkehrwinkel bzw. Haltezeit, dazu Prüfungen (Gelenk, min/max, Phase, Meldung). Meldungen kommen nur bei falscher Haltung, erst wenn sie 0,35 s anhält, dieselbe höchstens alle 3,5 s.
+- **Pflege:** Team-Bereich → *Übungen*. Der *Kamera-Test* zeigt alle Winkel live und übernimmt den aktuellen Winkel per Knopf als Ausgangs- oder Umkehrwert. Trainer reichen ein, Gründer geben frei.
+- **Beispielübungen:** „Beispiel: Kniebeuge“, „Beispiel: Unterarmstütz“, „Beispiel: Schulterdrücken stehend“ sind allgemeine Testregeln, **nicht** das Five-Konzept. Archivieren, sobald echte Five-Übungen angelegt sind.
+- **Gelenke:** Knie, Hüfte, Ellbogen, Schulter, Sprunggelenk, Körperlinie (Schulter–Hüfte–Knöchel), Rumpfneigung (gegen die Senkrechte), Kopfhaltung. Gemessen wird die der Kamera zugewandte Seite.
+- **Zugang:** derzeit alle freigeschalteten Mitglieder. Für das Coach-Abo später in `KameraTraining.tsx` zusätzlich `hat_coach_abo()` prüfen.
+
 ## Entwicklung
 
 ```bash

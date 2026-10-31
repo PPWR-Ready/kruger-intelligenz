@@ -54,6 +54,10 @@ export interface Uebung {
   an_geraet: boolean
   beschreibung: string | null
   status: InhaltStatus
+  /** Kamera-Regeln für den Trainer-Modus, siehe lib/pose/regeln.ts */
+  regeln?: unknown
+  erstellt_von?: string | null
+  version?: number
 }
 
 export interface Einheit {
