@@ -19,12 +19,12 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { adminClient, angemeldetePerson, CORS, envOptional, fehler, json, KonfigFehler } from '../_shared/umgebung.ts'
 import { pruefeWarnsignale, WARNHINWEIS } from '../_shared/warnsignale.ts'
-import { baueSystemanweisung, ordneVerlauf, type Quelle } from '../_shared/systemanweisung.ts'
-import { MetaSplitter } from '../_shared/meta.ts'
+import { baueSmalltalkAnweisung, baueSystemanweisung, ordneVerlauf, type Quelle } from '../_shared/systemanweisung.ts'
+import { META_ANFANG, MetaSplitter, liesMeta } from '../_shared/meta.ts'
 import { sseZeile } from '../_shared/sse.ts'
 import { einbetten } from '../_shared/embeddings.ts'
 import { suchen } from '../_shared/qdrant.ts'
-import { modell, pruefeSprachmodell, streameAntwort } from '../_shared/sprachmodell.ts'
+import { antworte, modell, pruefeSprachmodell, streameAntwort } from '../_shared/sprachmodell.ts'
 
 const MAX_FRAGE = 2000
 const KEIN_WISSEN =
@@ -194,23 +194,54 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
       { headers: { ...CORS, 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache' } },
     )
 
-  // Kein passendes Wissen: nichts erfinden, sondern ans Team weitergeben
+  // Kein passendes Wissen: Smalltalk und App-Fragen beantwortet der Assistent
+  // selbst, alles Fachliche (und jedes Warnsignal) geht ans Team – nichts erfinden.
   if (!treffer.length) {
+    const nachrichten = ordneVerlauf(verlauf as { rolle: 'mitglied' | 'assistent' | 'trainer'; inhalt: string }[], frage)
     return sse(async (schreibe) => {
-      await admin.from('rueckfragen').insert({
-        studio_id: profil.studio_id,
-        mitglied_id: profil.id,
-        nachricht_id: frageNachricht.id,
-        frage,
-      })
-      const text = warn.treffer ? `${KEIN_WISSEN}\n\n${WARNHINWEIS}` : KEIN_WISSEN
+      const weitergeben = async () => {
+        await admin.from('rueckfragen').insert({
+          studio_id: profil.studio_id,
+          mitglied_id: profil.id,
+          nachricht_id: frageNachricht.id,
+          frage,
+        })
+        const text = warn.treffer ? `${KEIN_WISSEN}\n\n${WARNHINWEIS}` : KEIN_WISSEN
+        schreibe({ typ: 'text', t: text })
+        const { data: antwort } = await admin
+          .from('chat_nachrichten')
+          .insert({ verlauf_id: verlaufId, rolle: 'assistent', inhalt: text, unsicher: true, warnsignal: warn.treffer, modell: null })
+          .select('id')
+          .single()
+        schreibe({ typ: 'ende', nachricht_id: antwort?.id, verlauf_id: verlaufId, quellen: [], unsicher: true, warnsignal: warn.treffer, rueckfrage: true })
+      }
+      if (warn.treffer) return await weitergeben()
+
+      let roh = ''
+      try {
+        roh = await antworte({
+          system: baueSmalltalkAnweisung({ vorname: profil.anzeigename.split(' ')[0], studioName: studio?.name ?? 'deinem Studio', kontext }),
+          nachrichten,
+          maxTokens: 300,
+        })
+      } catch (e) {
+        console.error('Smalltalk-Antwort fehlgeschlagen', e)
+        return await weitergeben()
+      }
+      const meta = liesMeta(roh)
+      const pos = roh.indexOf(META_ANFANG)
+      const text = (pos === -1 ? roh : roh.slice(0, pos)).trim()
+      // Nur eindeutig als Smalltalk markierte Antworten durchlassen
+      if (!meta || meta.fachfrage || !text) return await weitergeben()
+
       schreibe({ typ: 'text', t: text })
-      const { data: antwort } = await admin
+      const { data: antwort, error } = await admin
         .from('chat_nachrichten')
-        .insert({ verlauf_id: verlaufId, rolle: 'assistent', inhalt: text, unsicher: true, warnsignal: warn.treffer, modell: null })
+        .insert({ verlauf_id: verlaufId, rolle: 'assistent', inhalt: text, quellen: [], unsicher: false, warnsignal: false, modell: modell() })
         .select('id')
         .single()
-      schreibe({ typ: 'ende', nachricht_id: antwort?.id, verlauf_id: verlaufId, quellen: [], unsicher: true, warnsignal: warn.treffer, rueckfrage: true })
+      if (error) throw error
+      schreibe({ typ: 'ende', nachricht_id: antwort.id, verlauf_id: verlaufId, quellen: [], unsicher: false, warnsignal: false, rueckfrage: false })
     })
   }
 

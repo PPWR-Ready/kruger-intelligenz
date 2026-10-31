@@ -168,7 +168,7 @@ export function Assistent() {
 
         {nachrichten.map((n) =>
           n.rolle === 'mitglied' ? (
-            <div key={n.id} className="blase mitglied">{n.inhalt}</div>
+            <div key={n.id} className="blase eigene">{n.inhalt}</div>
           ) : n.rolle === 'system' ? (
             <div key={n.id} className="karte kritisch" role="alert" style={{ fontSize: 15 }}>{n.inhalt}</div>
           ) : (

@@ -2,7 +2,7 @@
 import { zerlege } from './zerlegen.ts'
 import { MetaSplitter, liesMeta } from './meta.ts'
 import { pruefeWarnsignale } from './warnsignale.ts'
-import { baueSystemanweisung, ordneVerlauf } from './systemanweisung.ts'
+import { baueSmalltalkAnweisung, baueSystemanweisung, ordneVerlauf } from './systemanweisung.ts'
 import { liesSse } from './sse.ts'
 import { punktId } from './ids.ts'
 
@@ -60,13 +60,13 @@ describe('MetaSplitter', () => {
     const r = durch(['Hallo ', 'Sabine.\n', '<<<META{"unsicher":false,"quellen":[2,1]}>>>'])
     expect(r.sichtbar).toBe('Hallo Sabine.\n')
     expect(r.text).toBe('Hallo Sabine.')
-    expect(r.meta).toEqual({ unsicher: false, quellen: [2, 1] })
+    expect(r.meta).toEqual({ unsicher: false, quellen: [2, 1], fachfrage: false })
   })
 
   it('erkennt die Meta-Zeile auch, wenn sie über mehrere Stücke verteilt ankommt', () => {
     const r = durch(['Antwort.', '<', '<<', 'ME', 'TA{"unsi', 'cher":true,"quellen":[]}', '>>>'])
     expect(r.sichtbar).toBe('Antwort.')
-    expect(r.meta).toEqual({ unsicher: true, quellen: [] })
+    expect(r.meta).toEqual({ unsicher: true, quellen: [], fachfrage: false })
   })
 
   it('gibt ohne Meta-Zeile den kompletten Text aus', () => {
@@ -76,7 +76,7 @@ describe('MetaSplitter', () => {
   })
 
   it('verwirft ungültige Quellenangaben', () => {
-    expect(liesMeta('<<<META{"unsicher":"ja","quellen":[1,"2",-3,4.5,5]}>>>')).toEqual({ unsicher: false, quellen: [1, 5] })
+    expect(liesMeta('<<<META{"unsicher":"ja","quellen":[1,"2",-3,4.5,5]}>>>')).toEqual({ unsicher: false, quellen: [1, 5], fachfrage: false })
     expect(liesMeta('<<<META{kaputt')).toBeNull()
   })
 })
@@ -128,6 +128,22 @@ describe('baueSystemanweisung', () => {
     const s = baueSystemanweisung({ vorname: 'Tom', studioName: 'X', kontext: 'chat', warnsignal: false, quellen: [] })
     expect(s).not.toContain('Ziele:')
     expect(s).toContain('(keine passenden Quellen gefunden)')
+  })
+})
+
+describe('Smalltalk-Modus ohne Wissen', () => {
+  it('erlaubt nur Smalltalk und App-Fragen und verlangt die Fachfrage-Markierung', () => {
+    const s = baueSmalltalkAnweisung({ vorname: 'Gabriel', studioName: 'Rückgrat Donaueschingen', kontext: 'chat' })
+    expect(s).toContain('Rückgrat Donaueschingen')
+    expect(s).toContain('Im Zweifel ist es eine Fachfrage')
+    expect(s).toContain('<<<META{"fachfrage":true}>>>')
+    expect(s).toContain('<<<META{"fachfrage":false}>>>')
+  })
+  it('liesMeta erkennt die Fachfrage-Markierung', () => {
+    expect(liesMeta('<<<META{"fachfrage":true}>>>')?.fachfrage).toBe(true)
+    expect(liesMeta('Hallo!\n<<<META{"fachfrage":false}>>>')?.fachfrage).toBe(false)
+    // alte Meta-Zeilen ohne Feld gelten nicht als Fachfrage
+    expect(liesMeta('<<<META{"unsicher":false,"quellen":[1]}>>>')?.fachfrage).toBe(false)
   })
 })
 
