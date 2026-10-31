@@ -70,8 +70,8 @@ Unter *Authentication → URL Configuration* die Adresse der App als **Site URL*
 Variante VPS (Docker):
 
 ```bash
-cd web
-docker build -t kruger-web \
+# im Hauptverzeichnis des Repos (die App nutzt Code aus supabase/functions/_shared)
+docker build -f web/Dockerfile -t kruger-web \
   --build-arg VITE_SUPABASE_URL=https://lqhkvxlxgatwuszxajrr.supabase.co \
   --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_… .
 docker run -d --restart unless-stopped -p 8080:80 kruger-web
