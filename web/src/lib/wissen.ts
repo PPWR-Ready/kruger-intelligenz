@@ -1,5 +1,5 @@
 // Speichern von Wissen: Admins geben direkt frei, Trainer reichen zur Freigabe ein.
-import { funktion, supabase } from './supabase'
+import { fehlertext, funktion, supabase } from './supabase'
 import type { Eingabeweg, Profil, Sichtbarkeit } from './db'
 
 export interface WissenEingabe {
@@ -20,7 +20,10 @@ export interface WissenEingabe {
 export interface WissenErgebnis { eintragId: string; versionId: string; freigegeben: boolean }
 
 function pruefe(e: { error: { message: string } | null }, was: string) {
-  if (e.error) throw new Error(`${was}: ${e.error.message}`)
+  if (e.error) {
+    console.error(was, e.error)
+    throw new Error(`${was} hat nicht geklappt. ${fehlertext(e.error)}`)
+  }
 }
 
 export async function wissenSpeichern(e: WissenEingabe, profil: Profil, istGruender: boolean): Promise<WissenErgebnis> {

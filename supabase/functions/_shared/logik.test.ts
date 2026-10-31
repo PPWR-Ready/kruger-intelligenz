@@ -99,8 +99,29 @@ describe('pruefeWarnsignale', () => {
     'Wie oft pro Woche soll ich trainieren?',
     'Was esse ich vor dem Training?',
     'Mein unterer Rücken zieht nach langem Sitzen',
+    'Ich habe Blasen an den Füßen vom Laufen',
+    'Ich habe Lampenfieber vor dem Kurs',
+    'Wie trainiere ich meine Brustmuskeln?',
+    'Meine Brustmuskeln ziehen nach dem Training',
   ])('bleibt ruhig bei: %s', (frage) => {
     expect(pruefeWarnsignale(frage).treffer).toBe(false)
+  })
+
+  it.each([
+    'Ich habe Brustschmerzen beim Training',
+    'Ich spüre Druck in der Brust',
+    'Es sticht in der Brust',
+    'Mein Herz rast und mir ist schwindelig',
+    'Ich bekomme schlecht Luft',
+    'Ich war kurz ohnmächtig',
+  ])('erkennt Notfall: %s', (frage) => {
+    const r = pruefeWarnsignale(frage)
+    expect(r.notfall).toBe(true)
+    expect(r.treffer).toBe(true)
+  })
+
+  it('Rückenschmerz ist kein Notfall', () => {
+    expect(pruefeWarnsignale('Mein Rücken tut weh').notfall).toBe(false)
   })
 })
 
@@ -117,7 +138,7 @@ describe('baueSystemanweisung', () => {
       quellen: [{ nr: 1, titel: 'Hüftbeuger', text: 'Becken ruhig halten.' }],
     })
     expect(s).toContain('Rückgrat Donaueschingen')
-    expect(s).toContain('[1] Hüftbeuger')
+    expect(s).toContain('<quelle nr="1" titel="Hüftbeuger">')
     expect(s).toContain('Vorname: Sabine')
     expect(s).toContain('„Hüftbeuger“')
     expect(s).toContain('Warnsignale')

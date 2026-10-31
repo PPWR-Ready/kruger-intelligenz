@@ -4,7 +4,7 @@ import { useSitzung } from '../../lib/sitzung'
 import { wissenSpeichern } from '../../lib/wissen'
 import { relativ } from '../../lib/zeit'
 import { THEMEN, type Rueckfrage } from '../../lib/db'
-import { Fehler, Laden, useMitteilung } from '../../components/Bausteine'
+import { Ladefehler, Fehler, Laden, useMitteilung } from '../../components/Bausteine'
 import { useTeam } from './Layout'
 
 type Zeile = Rueckfrage & { mitglied: { anzeigename: string } | null }
@@ -13,13 +13,16 @@ export function TeamRueckfragen() {
   const team = useTeam()
   const [ansicht, setAnsicht] = useState<'offen' | 'erledigt'>('offen')
   const [zeilen, setZeilen] = useState<Zeile[] | null>(null)
+  const [ladefehler, setLadefehler] = useState<string | null>(null)
   const [mitteilung, zeige] = useMitteilung()
 
   const laden = useCallback(async () => {
     const abfrage = supabase.from('rueckfragen').select('*, mitglied:profiles!rueckfragen_mitglied_id_fkey(anzeigename)')
-    const { data } = ansicht === 'offen'
+    const { data, error } = ansicht === 'offen'
       ? await abfrage.eq('status', 'offen').order('created_at')
       : await abfrage.neq('status', 'offen').order('beantwortet_am', { ascending: false }).limit(50)
+    setLadefehler(error ? fehlertext(error) : null)
+    if (error) return
     setZeilen((data ?? []) as unknown as Zeile[])
   }, [ansicht])
 
@@ -47,7 +50,7 @@ export function TeamRueckfragen() {
         Deine Antwort sieht das Mitglied direkt im Assistenten. Gespeichert als Wissen, kann der Assistent die Frage beim nächsten Mal selbst beantworten.
       </p>
 
-      {!zeilen ? <Laden /> : zeilen.length === 0 ? (
+      {ladefehler ? <Ladefehler text={ladefehler} erneut={() => void laden()} /> : !zeilen ? <Laden /> : zeilen.length === 0 ? (
         <div className="leer">{ansicht === 'offen' ? 'Keine offenen Rückfragen.' : 'Noch nichts erledigt.'}</div>
       ) : ansicht === 'offen' ? (
         zeilen.map((r) => <RueckfrageKarte key={r.id} r={r} fertig={erledigt} />)

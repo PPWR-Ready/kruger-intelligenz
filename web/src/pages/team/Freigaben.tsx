@@ -6,6 +6,7 @@ import { indexAnstossen } from '../../lib/wissen'
 import { relativ } from '../../lib/zeit'
 import type { Freigabe, Sichtbarkeit } from '../../lib/db'
 import { Fehler, Laden, useMitteilung } from '../../components/Bausteine'
+import { Antworttext } from '../../components/Antworttext'
 import { useTeam } from './Layout'
 
 type Zeile = Freigabe & {
@@ -14,7 +15,7 @@ type Zeile = Freigabe & {
     id: string; version: number; inhalt: string; eingabeweg: string
     eintrag: { id: string; titel: string; themen: string[]; sichtbarkeit: Sichtbarkeit; studio_id: string | null; status: string; aktuelle_version_id: string | null } | null
   } | null
-  uebung: { name: string; beschreibung: string | null } | null
+  uebung: { id: string; name: string; beschreibung: string | null; regeln: unknown } | null
 }
 
 const SICHTBAR: Record<Sichtbarkeit, string> = { alle: 'alle Mitglieder', premium: 'Coach-Abo', trainer: 'nur Team' }
@@ -24,16 +25,32 @@ export function TeamFreigaben() {
   const team = useTeam()
   const [zeilen, setZeilen] = useState<Zeile[] | null>(null)
   const [mitteilung, zeige] = useMitteilung()
+  const [ladefehler, setLadefehler] = useState<string | null>(null)
+  const [alleLaeuft, setAlleLaeuft] = useState(false)
 
   const laden = useCallback(async () => {
-    const { data } = await supabase.from('freigaben')
+    const { data, error } = await supabase.from('freigaben')
       .select(`*, einreicher:profiles!freigaben_eingereicht_von_fkey(anzeigename),
         version:wissen_versionen(id, version, inhalt, eingabeweg, eintrag:wissen_eintraege!wissen_versionen_eintrag_id_fkey(id, titel, themen, sichtbarkeit, studio_id, status, aktuelle_version_id)),
-        uebung:uebungen(name, beschreibung)`)
+        uebung:uebungen(id, name, beschreibung, regeln)`)
       .eq('status', 'offen').order('created_at')
+    if (error) { setLadefehler(fehlertext(error)); return }
+    setLadefehler(null)
     setZeilen((data ?? []) as unknown as Zeile[])
   }, [])
   useEffect(() => { void laden() }, [laden])
+
+  const wissenOffen = (zeilen ?? []).filter((f) => f.typ === 'wissen' && f.version)
+
+  async function alleFreigeben() {
+    if (!confirm(`Alle ${wissenOffen.length} Wissenstexte freigeben? Habt ihr sie gelesen? Danach nutzt der Assistent sie für Antworten.`)) return
+    setAlleLaeuft(true)
+    const { error } = await supabase.from('freigaben').update({ status: 'freigegeben' }).in('id', wissenOffen.map((f) => f.id))
+    setAlleLaeuft(false)
+    if (error) return zeige(fehlertext(error))
+    indexAnstossen()
+    fertig(`${wissenOffen.length} Texte freigegeben. Der Assistent kennt sie in etwa einer Minute.`)
+  }
 
   function fertig(text: string) {
     zeige(text)
@@ -52,7 +69,19 @@ export function TeamFreigaben() {
           ? 'Erst nach eurer Freigabe nutzt der Assistent einen Text. Prüft besonders medizinische Aussagen.'
           : 'Ein Admin prüft jeden Text, bevor der Assistent ihn nutzt.'}
       </p>
-      {!zeilen ? <Laden /> : zeilen.length === 0 ? (
+      {ladefehler && (
+        <div className="karte kritisch">
+          <span>Die Freigaben konnten nicht geladen werden. {ladefehler}</span>
+          <button className="knopf klein" onClick={() => void laden()}>Erneut laden</button>
+        </div>
+      )}
+      {s.istGruender && wissenOffen.length > 1 && (
+        <div className="karte akzent reihe zwischen">
+          <span>{wissenOffen.length} Wissenstexte warten auf eure Freigabe.</span>
+          <button className="knopf primaer klein" disabled={alleLaeuft} onClick={() => void alleFreigeben()}>{alleLaeuft ? 'Wird freigegeben …' : `Alle ${wissenOffen.length} freigeben`}</button>
+        </div>
+      )}
+      {ladefehler ? null : !zeilen ? <Laden /> : zeilen.length === 0 ? (
         <div className="leer">Nichts offen.</div>
       ) : zeilen.map((f) => <FreigabeKarte key={f.id} f={f} fertig={fertig} />)}
       {mitteilung}
@@ -114,7 +143,7 @@ function FreigabeKarte({ f, fertig }: { f: Zeile; fertig: (t: string) => void })
             )}
             <div className="stapel" style={{ gap: 6 }}>
               {vergleich && <span className="label-klein">Neu</span>}
-              <div className="karte" style={{ background: 'var(--bg)', whiteSpace: 'pre-wrap', fontSize: 15, lineHeight: 1.55, maxHeight: 420, overflow: 'auto' }}>{f.version.inhalt}</div>
+              <div className="karte" style={{ background: 'var(--bg)', fontSize: 15, lineHeight: 1.55, maxHeight: 420, overflow: 'auto' }}><Antworttext text={f.version.inhalt} /></div>
             </div>
           </div>
         </>
@@ -122,6 +151,7 @@ function FreigabeKarte({ f, fertig }: { f: Zeile; fertig: (t: string) => void })
         <>
           <h2 className="untertitel">{f.uebung.name}</h2>
           {f.uebung.beschreibung && <p className="klein" style={{ margin: 0 }}>{f.uebung.beschreibung}</p>}
+          <Link to={`/team/uebungen/${f.uebung.id}`} className="knopf klein" style={{ alignSelf: 'flex-start' }}>Regeln ansehen und mit Kamera testen</Link>
         </>
       ) : <span className="leise">Inhalt nicht mehr vorhanden.</span>}
 

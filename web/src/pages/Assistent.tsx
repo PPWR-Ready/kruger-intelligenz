@@ -17,6 +17,9 @@ interface Anzeige {
   quellen?: { eintrag_id: string; titel: string }[]
   unsicher?: boolean
   rueckfrage?: boolean
+  warnsignal?: boolean
+  /** bei Fehlern: die Frage, um sie noch einmal zu senden */
+  frage?: string
   weitergegeben?: boolean
   laeuft?: boolean
 }
@@ -43,6 +46,7 @@ export function Assistent() {
   const ende = useRef<HTMLDivElement>(null)
   const feld = useRef<HTMLTextAreaElement>(null)
   const [kopiert, setKopiert] = useState<string | null>(null)
+  const [angesagt, setAngesagt] = useState('')
   const automatischGefragt = useRef(false)
 
   // Gespräch für Tab-Wechsel merken (nicht über einen Neustart der App hinaus)
@@ -57,7 +61,10 @@ export function Assistent() {
       .then(({ data }) => setRueckfragen((data ?? []) as Rueckfrage[]))
   }, [s.profil])
 
-  useEffect(() => { ende.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [nachrichten])
+  useEffect(() => {
+    const ruhig = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ende.current?.scrollIntoView({ behavior: ruhig ? 'auto' : 'smooth', block: 'end' })
+  }, [nachrichten])
 
   // Eingabefeld wächst mit dem Text (bis zur CSS-Höchsthöhe)
   useEffect(() => {
@@ -83,12 +90,14 @@ export function Assistent() {
     const antwortId = `neu-${Date.now()}`
     setNachrichten((n) => [...n, { id: `f-${Date.now()}`, rolle: 'mitglied', inhalt: frage }, { id: antwortId, rolle: 'assistent', inhalt: '', laeuft: true }])
     const aendere = (f: (a: Anzeige) => Anzeige) => setNachrichten((n) => n.map((x) => (x.id === antwortId ? f(x) : x)))
+    let gesammelt = ''
     try {
       await frageStellen({ frage, verlauf_id: verlaufId }, {
         beimStart: (id) => setVerlaufId(id),
-        beimText: (t) => aendere((a) => ({ ...a, inhalt: a.inhalt + t })),
+        beimText: (t) => { gesammelt += t; aendere((a) => ({ ...a, inhalt: a.inhalt + t })) },
         beimEnde: (e) => {
-          aendere((a) => ({ ...a, id: e.nachricht_id ?? antwortId, laeuft: false, quellen: e.quellen, unsicher: e.unsicher, rueckfrage: e.rueckfrage }))
+          setAngesagt(`Antwort: ${gesammelt}`)
+          aendere((a) => ({ ...a, id: e.nachricht_id ?? antwortId, laeuft: false, quellen: e.quellen, unsicher: e.unsicher, rueckfrage: e.rueckfrage, warnsignal: e.warnsignal }))
           if (e.rueckfrage && s.profil) {
             void supabase.from('rueckfragen').select('*').eq('mitglied_id', s.profil.id).order('created_at', { ascending: false }).limit(5)
               .then(({ data }) => setRueckfragen((data ?? []) as Rueckfrage[]))
@@ -96,7 +105,7 @@ export function Assistent() {
         },
       })
     } catch (err) {
-      setNachrichten((n) => n.map((x) => (x.id === antwortId ? { id: antwortId, rolle: 'system', inhalt: err instanceof Error ? err.message : String(err) } : x)))
+      setNachrichten((n) => n.map((x) => (x.id === antwortId ? { id: antwortId, rolle: 'system', inhalt: err instanceof Error ? err.message : String(err), frage } : x)))
     } finally {
       setBeschaeftigt(false)
     }
@@ -160,14 +169,15 @@ export function Assistent() {
         {/* Im leeren Chat steht das Logo groß in der Mitte – oben dann nichts doppelt */}
         <div className={`chat-kopf-titel${leer ? ' versteckt' : ''}`} aria-hidden={leer}>
           <img src="/signet.png" alt="" width={19} height={24} />
-          <h1>Rückgrat</h1>
+          <span className="chat-kopf-name">Rückgrat</span>
         </div>
         <button type="button" className={`chat-kopf-knopf${leer ? ' versteckt' : ''}`} onClick={neuesGespraech} aria-label="Neuer Chat" disabled={leer}>
           <Icon name="neu" groesse={21} />
         </button>
       </header>
 
-      <div className={`chat-verlauf${leer ? ' leer-start' : ''}`} aria-live="polite">
+      <div className={`chat-verlauf${leer ? ' leer-start' : ''}`}>
+        <p className="nur-screenreader" role="status">{angesagt}</p>
         {beantwortet.slice(0, 2).map((r) => (
           <article key={r.id} className="team-antwort">
             <p className="team-antwort-kopf">Antwort vom Team · {relativ(r.beantwortet_am ?? r.created_at)}</p>
@@ -184,7 +194,13 @@ export function Assistent() {
         {leer && (
           <div className="chat-start">
             <img src="/signet.png" alt="" width={57} height={72} className="chat-start-signet" />
-            <h2>Hallo {vorname(s.profil)}.</h2>
+            <h1>Hallo {vorname(s.profil)}.</h1>
+            {s.profil && !s.profil.freigeschaltet ? (
+              <div className="karte akzent" style={{ textAlign: 'left', marginTop: 8 }}>
+                <strong>Gleich geht’s los.</strong>
+                <span className="klein">Dein Zugang wird gerade vom Team freigeschaltet. Sobald das passiert ist, kannst du hier alles fragen – Training, Kurse, Rücken, Ernährung.</span>
+              </div>
+            ) : <>
             <p>Frag mich zu Training, Rücken, Ernährung oder Gesundheit.</p>
             <div className="vorschlaege">
               {VORSCHLAEGE.map((v) => (
@@ -194,6 +210,7 @@ export function Assistent() {
                 </button>
               ))}
             </div>
+            </>}
           </div>
         )}
 
@@ -201,7 +218,23 @@ export function Assistent() {
           n.rolle === 'mitglied' ? (
             <div key={n.id} className="blase eigene">{n.inhalt}</div>
           ) : n.rolle === 'system' ? (
-            <div key={n.id} className="chat-fehler" role="alert"><Icon name="warnung" groesse={18} />{n.inhalt}</div>
+            <div key={n.id} className="chat-fehler" role="alert">
+              <Icon name="warnung" groesse={18} />
+              <div className="stapel" style={{ gap: 8 }}>
+                <span>{n.inhalt}</span>
+                {n.frage && !beschaeftigt && (
+                  <button type="button" className="knopf klein" style={{ alignSelf: 'flex-start' }} onClick={() => {
+                    const f = n.frage as string
+                    // Fehlermeldung und die gescheiterte Frage entfernen, dann neu senden
+                    setNachrichten((liste) => {
+                      const i = liste.findIndex((x) => x.id === n.id)
+                      return liste.filter((_, j) => j !== i && j !== i - 1)
+                    })
+                    void senden(f)
+                  }}>Nochmal senden</button>
+                )}
+              </div>
+            </div>
           ) : (
             <div key={n.id} className="antwort">
               <img src="/signet.png" alt="" width={19} height={24} className={`antwort-signet${n.laeuft ? ' denkt' : ''}`} />
@@ -209,7 +242,10 @@ export function Assistent() {
                 {n.laeuft && !n.inhalt ? (
                   <span className="tippt-punkte" aria-label="Antwort wird geschrieben"><i /><i /><i /></span>
                 ) : (
-                  <Antworttext text={n.inhalt} />
+                  <div className={n.warnsignal ? 'warnkarte' : undefined}>
+                    {n.warnsignal && !n.laeuft && <p className="warnkarte-kopf"><Icon name="warnung" groesse={18} />Bitte ernst nehmen</p>}
+                    <Antworttext text={n.inhalt} />
+                  </div>
                 )}
                 {!n.laeuft && (
                   <>
@@ -231,7 +267,7 @@ export function Assistent() {
             </div>
           ),
         )}
-        <div ref={ende} />
+        <div ref={ende} className="chat-ende" />
       </div>
 
       <form className="chat-eingabe" onSubmit={absenden}>
@@ -257,8 +293,8 @@ export function Assistent() {
 const alterInTagen = (iso: string) => (Date.now() - new Date(iso).getTime()) / 86400000
 
 const VORSCHLAEGE = [
-  { titel: 'Nacken', frage: 'Was hilft gegen Verspannungen im Nacken?' },
-  { titel: 'Rhythmus', frage: 'Wie oft pro Woche sollte ich trainieren?' },
-  { titel: 'Kamera-Coaching', frage: 'Wie funktioniert das Training mit Kamera?' },
   { titel: 'Five-Konzept', frage: 'Was ist das Five-Konzept genau?' },
+  { titel: 'Kurse', frage: 'Welche Five-Kurse gibt es in der Woche?' },
+  { titel: 'Probetraining', frage: 'Wie kann ich ein Probetraining machen?' },
+  { titel: 'Kamera-Coaching', frage: 'Wie funktioniert das Training mit Kamera?' },
 ]

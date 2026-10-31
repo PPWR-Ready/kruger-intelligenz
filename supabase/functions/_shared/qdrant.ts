@@ -31,6 +31,7 @@ async function anfrage(methode: string, pfad: string, body?: unknown): Promise<R
     method: methode,
     headers: { 'content-type': 'application/json', ...(schluessel ? { 'api-key': schluessel } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(20_000),
   })
 }
 

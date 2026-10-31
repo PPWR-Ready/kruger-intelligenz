@@ -85,8 +85,8 @@ export function TeamMitglieder() {
                 <h2 className="untertitel">Aktiv ({aktive.length})</h2>
                 {aktive.length === 0 ? <div className="leer">Noch niemand freigeschaltet.</div> : (
                   <div className="tabelle-rahmen">
-                    <table className="tabelle" style={{ minWidth: 520 }}>
-                      <thead><tr><th>Name</th><th>Rolle</th><th>Seit</th><th></th></tr></thead>
+                    <table className="tabelle" style={{ minWidth: 0 }}>
+                      <thead><tr><th>Name</th><th>Rolle</th><th className="nur-breit">Seit</th><th></th></tr></thead>
                       <tbody>
                         {aktive.map((p) => (
                           <tr key={p.id}>
@@ -94,12 +94,18 @@ export function TeamMitglieder() {
                             <td>
                               {s.istGruender && p.id !== s.profil?.id ? (
                                 <select className="eingabe" style={{ minHeight: 40, padding: '6px 10px' }} value={p.rolle} aria-label={`Rolle von ${p.anzeigename}`}
-                                  onChange={(e) => void aendern(p, { rolle: e.target.value as Rolle }, `${p.anzeigename} ist jetzt ${ROLLEN[e.target.value as Rolle]}`)}>
+                                  onChange={(e) => {
+                                    const neu = e.target.value as Rolle
+                                    if (neu === p.rolle) return
+                                    const warnung = neu === 'gruender' ? ' Admins dürfen alles, auch Wissen freigeben und Rollen ändern.' : ''
+                                    if (!confirm(`${p.anzeigename} wirklich zu „${ROLLEN[neu]}“ machen?${warnung}`)) { e.target.value = p.rolle; return }
+                                    void aendern(p, { rolle: neu }, `${p.anzeigename} ist jetzt ${ROLLEN[neu]}`)
+                                  }}>
                                   {(Object.keys(ROLLEN) as Rolle[]).map((r) => <option key={r} value={r}>{ROLLEN[r]}</option>)}
                                 </select>
                               ) : ROLLEN[p.rolle]}
                             </td>
-                            <td className="leise">{datumKurz(p.created_at)}</td>
+                            <td className="leise nur-breit">{datumKurz(p.created_at)}</td>
                             <td style={{ textAlign: 'right' }}>
                               {p.id !== s.profil?.id && (p.rolle === 'mitglied' || s.istGruender) && (
                                 <button className="knopf klein still" onClick={() => confirm(`Zugang von ${p.anzeigename} sperren?`) && void aendern(p, { freigeschaltet: false }, 'Zugang gesperrt')}>Sperren</button>
@@ -127,8 +133,9 @@ export function TeamMitglieder() {
 
 function Einladungen({ codes, neuLaden, zeige }: { codes: Einladungscode[]; neuLaden: () => void; zeige: (t: string) => void }) {
   const s = useSitzung()
-  const [nutzungen, setNutzungen] = useState(1)
-  const [tage, setTage] = useState(30)
+  const [nutzungen, setNutzungen] = useState('1')
+  const [tage, setTage] = useState('30')
+  const [laeuft, setLaeuft] = useState(false)
   const [rolle, setRolle] = useState<Rolle>('mitglied')
   const [fehler, setFehler] = useState<string | null>(null)
 
@@ -136,13 +143,18 @@ function Einladungen({ codes, neuLaden, zeige }: { codes: Einladungscode[]; neuL
 
   async function erstellen(e: FormEvent) {
     e.preventDefault()
-    if (!s.profil) return
+    if (!s.profil || laeuft) return
     setFehler(null)
+    const n = Number(nutzungen), t = tage.trim() === '' ? NaN : Number(tage)
+    if (!Number.isInteger(n) || n < 1 || n > 500) return setFehler('Nutzungen: bitte eine Zahl von 1 bis 500.')
+    if (!Number.isInteger(t) || t < 0 || t > 365) return setFehler('Gültig: bitte 0 bis 365 Tage (0 = unbegrenzt).')
+    setLaeuft(true)
     const code = neuerCode()
     const { error } = await supabase.from('einladungscodes').insert({
-      code, studio_id: s.profil.studio_id, erstellt_von: s.profil.id, max_nutzungen: nutzungen, rolle,
-      gueltig_bis: tage > 0 ? new Date(Date.now() + tage * 86400000).toISOString() : null,
+      code, studio_id: s.profil.studio_id, erstellt_von: s.profil.id, max_nutzungen: n, rolle,
+      gueltig_bis: t > 0 ? new Date(Date.now() + t * 86400000).toISOString() : null,
     })
+    setLaeuft(false)
     if (error) return setFehler(fehlertext(error))
     await kopieren(code)
     neuLaden()
@@ -169,11 +181,11 @@ function Einladungen({ codes, neuLaden, zeige }: { codes: Einladungscode[]; neuL
   return (
     <section className="karte" style={{ gap: 16 }}>
       <h2 className="untertitel">Einladungscodes</h2>
-      <p className="klein leise" style={{ margin: 0 }}>Mitglieder registrieren sich mit einem Code. Neue Zugänge schaltest du danach links frei.</p>
+      <p className="klein leise" style={{ margin: 0 }}>Mitglieder registrieren sich mit einem Code. Neue Zugänge schaltest du danach unter „Warten auf Freischaltung“ frei.</p>
       <form className="stapel" onSubmit={erstellen}>
         <div className="raster-2">
-          <label className="feld"><span>Nutzungen</span><input type="number" min={1} max={500} value={nutzungen} onChange={(e) => setNutzungen(Math.max(1, Math.min(500, Number(e.target.value) || 1)))} /></label>
-          <label className="feld"><span>Gültig (Tage)</span><input type="number" min={0} max={365} value={tage} onChange={(e) => setTage(Math.max(0, Math.min(365, Number(e.target.value) || 0)))} /></label>
+          <label className="feld"><span>Nutzungen</span><input type="number" inputMode="numeric" min={1} max={500} value={nutzungen} onChange={(e) => setNutzungen(e.target.value)} /></label>
+          <label className="feld"><span>Gültig (Tage)</span><input type="number" inputMode="numeric" min={0} max={365} value={tage} onChange={(e) => setTage(e.target.value)} /></label>
         </div>
         {s.istGruender && (
           <label className="feld">
@@ -186,7 +198,7 @@ function Einladungen({ codes, neuLaden, zeige }: { codes: Einladungscode[]; neuL
           </label>
         )}
         <span className="klein leise">0 Tage = unbegrenzt gültig. Für einen Aushang im Studio z. B. 200 Nutzungen. Team-Codes am besten nur einmal nutzbar.</span>
-        <button className="knopf primaer">Code erstellen und Link kopieren</button>
+        <button className="knopf primaer" disabled={laeuft}>{laeuft ? 'Einen Moment …' : 'Code erstellen und Link kopieren'}</button>
       </form>
       <Fehler text={fehler} />
       <div className="stapel" style={{ gap: 8 }}>
@@ -195,7 +207,7 @@ function Einladungen({ codes, neuLaden, zeige }: { codes: Einladungscode[]; neuL
           <div key={c.code} className="reihe zwischen" style={{ borderTop: '1px solid var(--line)', paddingTop: 8, flexWrap: 'wrap', gap: 6 }}>
             <div className="stapel" style={{ gap: 2 }}>
               <span style={{ fontWeight: 600, fontFamily: 'ui-monospace, monospace', opacity: gueltig(c) ? 1 : 0.5 }}>{c.code}</span>
-              <span className="klein leise">{c.rolle !== 'mitglied' && <strong style={{ color: 'var(--accent-text)' }}>{ROLLEN[c.rolle]} · </strong>}{c.genutzt}/{c.max_nutzungen} genutzt{c.gueltig_bis ? ` · bis ${datumKurz(c.gueltig_bis)}` : ''}{gueltig(c) ? '' : ' · abgelaufen'}</span>
+              <span className="klein leise">{c.rolle !== 'mitglied' && <strong style={{ color: 'var(--accent-text)' }}>{ROLLEN[c.rolle]} · </strong>}{c.genutzt}/{c.max_nutzungen} genutzt{c.gueltig_bis ? ` · bis ${datumKurz(c.gueltig_bis)}` : ''}{gueltig(c) ? '' : c.genutzt >= c.max_nutzungen ? ' · aufgebraucht' : ' · abgelaufen'}</span>
             </div>
             <div className="reihe" style={{ gap: 6 }}>
               {gueltig(c) && <button className="knopf klein" onClick={() => void kopieren(c.code)}>Link kopieren</button>}

@@ -24,6 +24,7 @@ async function stapel(texte: string[]): Promise<number[][]> {
       ...(schluessel ? { authorization: `Bearer ${schluessel}` } : {}),
     },
     body: JSON.stringify({ model: env('EMBEDDING_MODELL', 'BAAI/bge-m3'), input: texte }),
+    signal: AbortSignal.timeout(60_000),
   })
   if (!antwort.ok) throw new Error(`Embeddings ${antwort.status}: ${(await antwort.text()).slice(0, 300)}`)
   const daten = (await antwort.json()) as { data: { embedding: number[]; index: number }[] }

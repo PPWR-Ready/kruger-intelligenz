@@ -74,7 +74,7 @@ export function Skala({ wert, beiWahl }: { wert: number | null; beiWahl: (w: num
     <div className="stapel">
       <div className="skala" role="radiogroup" aria-label="Rückenschmerz von 0 bis 10">
         {Array.from({ length: 11 }, (_, i) => (
-          <button key={i} type="button" role="radio" aria-checked={wert === i} aria-pressed={wert === i} style={{ background: farbe(i) }} onClick={() => beiWahl(i)}
+          <button key={i} type="button" role="radio" aria-checked={wert === i} style={{ background: farbe(i) }} onClick={() => beiWahl(i)}
             aria-label={i === 0 ? '0, kein Schmerz' : i === 10 ? '10, sehr stark' : String(i)}>
             {i}
           </button>
@@ -101,3 +101,26 @@ export function Verlauf({ werte, beschriftung, farbe = 'var(--success)' }: { wer
     </svg>
   )
 }
+
+/** Laden hat nicht geklappt: klar sagen statt leere Liste zeigen. */
+export function Ladefehler({ text, erneut }: { text: string; erneut: () => void }) {
+  return (
+    <div className="karte kritisch" role="alert">
+      <span>Das konnte gerade nicht geladen werden. {text}</span>
+      <button className="knopf klein" style={{ alignSelf: 'flex-start' }} onClick={erneut}>Erneut laden</button>
+    </div>
+  )
+}
+
+/** Warnt beim Schließen oder Neuladen des Tabs, solange etwas nicht gespeichert ist. */
+export function useUngespeichertWarnung(aktiv: boolean) {
+  useEffect(() => {
+    if (!aktiv) return
+    const warnen = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', warnen)
+    return () => window.removeEventListener('beforeunload', warnen)
+  }, [aktiv])
+}
+
+/** Fragt nach, bevor ein Klick ungespeicherte Änderungen verwirft. */
+export const verlassenOk = (geaendert: boolean) => !geaendert || confirm('Deine Änderungen sind noch nicht gespeichert. Trotzdem verlassen?')

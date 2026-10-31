@@ -7,7 +7,7 @@ import { fotoVorbereiten, IMPORT_TYPEN, seitenLesen, textAusDatei } from '../../
 import { hoereZu, spracheingabeMoeglich } from '../../lib/sprache'
 import { datumKurz, relativ } from '../../lib/zeit'
 import { THEMEN, type Eingabeweg, type IndexStatus, type InhaltStatus, type Sichtbarkeit, type WissenEintrag, type WissenVersion } from '../../lib/db'
-import { Fehler, Laden, useMitteilung } from '../../components/Bausteine'
+import { Ladefehler, Fehler, Laden, useMitteilung, useUngespeichertWarnung, verlassenOk } from '../../components/Bausteine'
 import { Icon } from '../../components/Icon'
 
 const STATUS: Record<InhaltStatus, { text: string; klasse: string }> = {
@@ -25,17 +25,22 @@ const SICHTBAR: Record<Sichtbarkeit, string> = { alle: 'Alle Mitglieder', premiu
 type Zeile = WissenEintrag & { version: Pick<WissenVersion, 'version' | 'index_status' | 'index_fehler'> | null }
 
 /* ------------------------------------------------------------ Liste */
+const EINGABEWEG: Record<string, string> = { text: 'geschrieben', diktat: 'diktiert', upload: 'aus Datei', scan: 'aus Foto', interview: 'Interview', rueckfrage: 'aus Rückfrage' }
+
 export function TeamWissen() {
   const [zeilen, setZeilen] = useState<Zeile[] | null>(null)
+  const [ladefehler, setLadefehler] = useState<string | null>(null)
   const [suche, setSuche] = useState('')
   const [filter, setFilter] = useState<'alle' | InhaltStatus>('alle')
   const [indexLaeuft, setIndexLaeuft] = useState(false)
   const [mitteilung, zeige] = useMitteilung()
 
   const laden = useCallback(async () => {
-    const { data } = await supabase.from('wissen_eintraege')
+    const { data, error } = await supabase.from('wissen_eintraege')
       .select('*, version:wissen_versionen!wissen_eintraege_aktuelle_version_fk(version, index_status, index_fehler)')
       .order('updated_at', { ascending: false })
+    setLadefehler(error ? fehlertext(error) : null)
+    if (error) return
     setZeilen((data ?? []) as unknown as Zeile[])
   }, [])
   useEffect(() => { void laden() }, [laden])
@@ -68,14 +73,14 @@ export function TeamWissen() {
           <h1 className="titel">Wissen</h1>
         </div>
         <div className="reihe" style={{ flexWrap: 'wrap' }}>
-          <button className="knopf" onClick={() => void indexieren()} disabled={indexLaeuft}><Icon name="aktualisieren" groesse={18} />{indexLaeuft ? 'Liest ein …' : 'Jetzt einlesen'}</button>
+          <button className="knopf" onClick={() => void indexieren()} disabled={indexLaeuft}><Icon name="aktualisieren" groesse={18} />{indexLaeuft ? 'Wird aktualisiert …' : 'Assistent aktualisieren'}</button>
           <Link to="/team/wissen/neu" className="knopf primaer"><Icon name="plus" groesse={18} staerke={2} />Neues Wissen</Link>
         </div>
       </header>
 
       {zeilen && (
         <p className="klein leise" style={{ margin: 0 }}>
-          {imAssistenten} Einträge kennt der Assistent.{fehlerhaft > 0 && <span style={{ color: 'var(--critical)' }}> {fehlerhaft} konnten nicht eingelesen werden – „Jetzt einlesen“ versucht es erneut.</span>}
+          {imAssistenten === 1 ? '1 Eintrag kennt' : `${imAssistenten} Einträge kennt`} der Assistent.{fehlerhaft > 0 && <span style={{ color: 'var(--critical)' }}> {fehlerhaft === 1 ? '1 Eintrag konnte' : `${fehlerhaft} Einträge konnten`} nicht eingelesen werden – „Assistent aktualisieren“ versucht es noch einmal.</span>}
         </p>
       )}
 
@@ -88,7 +93,7 @@ export function TeamWissen() {
         </div>
       </div>
 
-      {!zeilen ? <Laden /> : liste.length === 0 ? (
+      {ladefehler ? <Ladefehler text={ladefehler} erneut={() => void laden()} /> : !zeilen ? <Laden /> : liste.length === 0 ? (
         <div className="leer">{zeilen.length === 0 ? 'Noch kein Wissen erfasst. Leg mit „Neues Wissen“ los: schreiben, diktieren, Datei hochladen oder Seiten fotografieren.' : 'Nichts gefunden.'}</div>
       ) : (
         <div className="tabelle-rahmen">
@@ -103,6 +108,7 @@ export function TeamWissen() {
                   <td><span className={`status ${STATUS[z.status].klasse}`}>{STATUS[z.status].text}</span></td>
                   <td className="leise" title={z.version?.index_fehler ?? undefined} style={z.version?.index_status === 'fehler' ? { color: 'var(--critical)' } : undefined}>
                     {z.status === 'freigegeben' && z.version ? INDEX[z.version.index_status] : '–'}
+                    {z.version?.index_status === 'fehler' && z.version.index_fehler && <div className="klein">{z.version.index_fehler.slice(0, 140)}</div>}
                   </td>
                   <td className="leise">{relativ(z.updated_at)}</td>
                 </tr>
@@ -147,6 +153,10 @@ export function TeamWissenEditor() {
   const [arbeitet, setArbeitet] = useState<string | null>(null)
   const [fehler, setFehler] = useState<string | null>(null)
   const [mitteilung, zeige] = useMitteilung()
+  const [basis, setBasis] = useState('\u0000')
+  const [gespeichert, setGespeichert] = useState(false)
+  const geaendert = !gespeichert && (neu ? !!(titel.trim() || inhalt.trim()) : basis !== '\u0000' && `${titel}\u0000${inhalt}` !== basis)
+  useUngespeichertWarnung(geaendert)
 
   useEffect(() => {
     if (neu) return
@@ -165,7 +175,9 @@ export function TeamWissenEditor() {
       setVersionen(liste)
       setOffeneFreigabe((count ?? 0) > 0)
       setTitel(e.titel); setThemen(e.themen); setSichtbarkeit(e.sichtbarkeit); setQuelle(e.quelle ?? ''); setGlobal(e.studio_id === null)
-      setInhalt((liste.find((x) => x.id === e.aktuelle_version_id) ?? liste[0])?.inhalt ?? '')
+      const geladenerInhalt = (liste.find((x) => x.id === e.aktuelle_version_id) ?? liste[0])?.inhalt ?? ''
+      setInhalt(geladenerInhalt)
+      setBasis(`${e.titel}\u0000${geladenerInhalt}`)
       setGeladen(true)
     })()
   }, [id, neu])
@@ -233,6 +245,7 @@ export function TeamWissenEditor() {
         eintragId: eintrag?.id, titel, themen, sichtbarkeit, quelle: quelle || null, inhalt,
         eingabeweg: weg as Eingabeweg, global, dateien,
       }, s.profil, s.istGruender)
+      setGespeichert(true)
       zeige(ergebnis.freigegeben ? 'Gespeichert und freigegeben' : 'Zur Freigabe eingereicht')
       setTimeout(() => navigate('/team/wissen'), 800)
     } catch (err) {
@@ -264,7 +277,7 @@ export function TeamWissenEditor() {
   return (
     <>
       <header className="reihe" style={{ flexWrap: 'wrap' }}>
-        <Link to="/team/wissen" className="knopf rund" aria-label="Zurück zur Liste" style={{ background: 'var(--surface)' }}><Icon name="zurueck" groesse={22} staerke={2} /></Link>
+        <Link to="/team/wissen" className="knopf rund" aria-label="Zurück zur Liste" style={{ background: 'var(--surface)' }} onClick={(ev) => { if (!verlassenOk(geaendert)) ev.preventDefault() }}><Icon name="zurueck" groesse={22} staerke={2} /></Link>
         <div className="stapel" style={{ gap: 4 }}>
           <p className="eyebrow">{neu ? 'Neues Wissen' : `Version ${versionen[0]?.version ?? 1}`}</p>
           <h1 className="titel">{neu ? 'Wissen erfassen' : eintrag?.titel}</h1>
@@ -355,7 +368,7 @@ export function TeamWissenEditor() {
               {versionen.map((v) => (
                 <div key={v.id} className="reihe zwischen klein">
                   <span>Version {v.version}{v.id === eintrag?.aktuelle_version_id ? ' · aktuell' : ''}</span>
-                  <span className="leise">{datumKurz(v.created_at)} · {v.eingabeweg}</span>
+                  <span className="leise">{datumKurz(v.created_at)} · {EINGABEWEG[v.eingabeweg] ?? v.eingabeweg}</span>
                 </div>
               ))}
             </section>

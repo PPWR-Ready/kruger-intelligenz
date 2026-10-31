@@ -253,7 +253,7 @@ export class Auswertung {
       if (this.aktiv.size === 0) this.gehaltenMs += dt
       if (this.r.halten_sekunden && this.gehaltenMs >= this.r.halten_sekunden * 1000) {
         this.zustand = 'fertig'
-        ereignisse.push({ art: 'fertig', text: 'Geschafft.' })
+        ereignisse.push({ art: 'fertig', text: 'Stark, geschafft!' })
       }
       return ereignisse
     }
@@ -275,7 +275,7 @@ export class Auswertung {
           ereignisse.push({ art: 'wiederholung', text: String(this.wdh) })
           if (this.r.ziel_wiederholungen && this.wdh >= this.r.ziel_wiederholungen) {
             this.zustand = 'fertig'
-            ereignisse.push({ art: 'fertig', text: 'Satz geschafft.' })
+            ereignisse.push({ art: 'fertig', text: `Stark! ${this.wdh} von ${this.r.ziel_wiederholungen} geschafft.` })
           }
         } else if (this.maxFortschritt >= 0.45 && this.darfMelden('__unvollstaendig', t, MELDUNG_PAUSE_MS)) {
           ereignisse.push({ art: 'unvollstaendig', text: MELDUNG_UNVOLLSTAENDIG })

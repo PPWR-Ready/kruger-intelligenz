@@ -119,7 +119,7 @@ describe('Auswertung Wiederholungen', () => {
     expect(a.stand().wiederholungen).toBe(3)
     expect(a.stand().bewertungen).toEqual(['sauber', 'sauber', 'sauber'])
     expect(ereignisse.filter((e) => e.startsWith('fehler'))).toEqual([])
-    expect(ereignisse.at(-1)).toBe('fertig:Satz geschafft.')
+    expect(ereignisse.at(-1)).toMatch(/^fertig:Stark! \d+ von \d+ geschafft\.$/)
   })
 
   it('kleines Wackeln in der Ausgangsstellung zählt nicht', () => {
