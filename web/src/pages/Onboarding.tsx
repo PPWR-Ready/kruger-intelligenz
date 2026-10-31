@@ -19,14 +19,14 @@ export function Willkommen() {
       <div className="seite ohne-tabs" style={{ gap: 24 }}>
         <Schritte aktuell={1} />
         <div className="karte" style={{ height: 260, alignItems: 'center', justifyContent: 'center', textAlign: 'center' }} aria-hidden="true">
-          <span className="wortmarke" style={{ fontSize: 44 }}>RÜCKGRAT</span>
+          <img src="/logo.png" alt="" width={260} height={165} style={{ width: 260, height: 'auto', maxWidth: '85%' }} />
           <span className="leise klein">Donaueschingen · seit 1993</span>
         </div>
         <div className="stapel">
           <p className="eyebrow">Seit 1993 · Donaueschingen</p>
           <h1 className="display display-xl">Die Quelle deiner Kraft. Jetzt in deiner Tasche.</h1>
           <p style={{ margin: 0, color: 'var(--text-soft)' }}>
-            Frag uns alles zu Training, Rücken, Ernährung und Gesundheit. Bald auch mit Kamera-Coaching nach dem Five-Konzept.
+            Frag uns alles zu Training, Rücken, Ernährung und Gesundheit. Und trainiere mit Kamera-Coaching nach dem Five-Konzept.
           </p>
         </div>
         <div className="unten">
