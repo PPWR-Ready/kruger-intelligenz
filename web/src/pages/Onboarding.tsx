@@ -24,7 +24,7 @@ export function Willkommen() {
         </div>
         <div className="stapel">
           <p className="eyebrow">Seit 1993 · Donaueschingen</p>
-          <h1 className="display display-xl">Die Quelle deiner Kraft. Jetzt in deiner Tasche.</h1>
+          <h1 className="display display-xl">Die Quelle deiner Kraft. <span className="akzent-text">Jetzt in deiner Tasche.</span></h1>
           <p style={{ margin: 0, color: 'var(--text-soft)' }}>
             Frag uns alles zu Training, Rücken, Ernährung und Gesundheit. Und trainiere mit Kamera-Coaching nach dem Five-Konzept.
           </p>

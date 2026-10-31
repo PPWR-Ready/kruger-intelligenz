@@ -285,7 +285,7 @@ export function TeamWissenEditor() {
             <div className="reihe" style={{ flexWrap: 'wrap', gap: 8 }}>
               {spracheingabeMoeglich() && (
                 <button type="button" className="knopf klein" onClick={diktat} aria-pressed={hoert} disabled={!darfBearbeiten}
-                  style={hoert ? { background: 'var(--critical)', color: '#121212', borderColor: 'var(--critical)' } : undefined}>
+                  style={hoert ? { background: 'var(--critical)', color: '#fff', borderColor: 'var(--critical)' } : undefined}>
                   <Icon name={hoert ? 'stopp' : 'mikro'} groesse={18} />{hoert ? 'Diktat beenden' : 'Diktieren'}
                 </button>
               )}
@@ -309,7 +309,7 @@ export function TeamWissenEditor() {
           </label>
           <div className="reihe zwischen klein leise">
             <span>{inhalt.trim().split(/\s+/).filter(Boolean).length} Wörter{dateien.length ? ` · ${dateien.length} Original${dateien.length > 1 ? 'e' : ''} wird mitgespeichert` : ''}</span>
-            {arbeitet && <span role="status" style={{ color: 'var(--accent)' }}>{arbeitet}</span>}
+            {arbeitet && <span role="status" style={{ color: 'var(--accent-text)' }}>{arbeitet}</span>}
           </div>
         </div>
 
