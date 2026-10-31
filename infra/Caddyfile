@@ -1,0 +1,12 @@
+# HTTPS für die KI-Dienste. Die DNS-Einträge (A-Record) beider Domains müssen
+# auf die IP des VPS zeigen, dann holt Caddy die Zertifikate selbst.
+
+{$QDRANT_DOMAIN} {
+	encode gzip
+	reverse_proxy qdrant:6333
+}
+
+{$EMBEDDING_DOMAIN} {
+	encode gzip
+	reverse_proxy embeddings:7997
+}

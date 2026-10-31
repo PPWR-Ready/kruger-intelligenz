@@ -1,7 +1,9 @@
 // Index-Pflege: bringt Qdrant auf den Stand der freigegebenen Wissensversionen.
 //
 // Aufruf
-//   - von n8n jede Minute: POST mit Kopfzeile x-index-secret: <INDEX_SECRET>
+//   - von pg_cron jede Minute, wenn etwas zu tun ist (Migration index_automatik):
+//     POST mit Kopfzeile x-index-secret: <Geheimnis aus Vault „index_geheimnis“>
+//   - optional von außen (z. B. n8n) mit x-index-secret: <INDEX_SECRET>
 //   - aus dem Wissens-Studio: POST mit Login-Token einer Person aus dem Team
 // Body (optional): { erneut: true }  → auch Versionen mit Status „fehler“ erneut versuchen
 //
@@ -35,8 +37,13 @@ Deno.serve(async (req) => {
   const admin = adminClient()
 
   // Zugang: gemeinsames Geheimnis (n8n) oder angemeldete Person aus dem Team
+  const kopf = req.headers.get('x-index-secret') ?? ''
   const geheimnis = envOptional('INDEX_SECRET')
-  const perGeheimnis = !!geheimnis && req.headers.get('x-index-secret') === geheimnis
+  let perGeheimnis = !!kopf && !!geheimnis && kopf === geheimnis
+  if (!perGeheimnis && kopf) {
+    const { data } = await admin.rpc('index_geheimnis_pruefen', { p_geheimnis: kopf })
+    perGeheimnis = data === true
+  }
   if (!perGeheimnis) {
     const person = await angemeldetePerson(req, admin)
     if (!person) return fehler('Nicht berechtigt.', 401)

@@ -49,6 +49,13 @@ export function modell(): string {
   return env('LLM_MODELL', anbieter() === 'anthropic' ? 'claude-sonnet-5-5' : undefined)
 }
 
+/** Wirft KonfigFehler, wenn das Sprachmodell nicht eingerichtet ist – vor dem ersten Speichern prüfen. */
+export function pruefeSprachmodell(): void {
+  modell()
+  if (anbieter() === 'openai') env('LLM_BASIS_URL')
+  else env('ANTHROPIC_API_KEY')
+}
+
 /** Streamt die Antwort Stück für Stück als Text. */
 export async function* streameAntwort(anfrage: Anfrage): AsyncGenerator<string> {
   if (anbieter() === 'openai') yield* streameOpenAi(anfrage)

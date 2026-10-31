@@ -24,7 +24,7 @@ import { MetaSplitter } from '../_shared/meta.ts'
 import { sseZeile } from '../_shared/sse.ts'
 import { einbetten } from '../_shared/embeddings.ts'
 import { suchen } from '../_shared/qdrant.ts'
-import { modell, streameAntwort } from '../_shared/sprachmodell.ts'
+import { modell, pruefeSprachmodell, streameAntwort } from '../_shared/sprachmodell.ts'
 
 const MAX_FRAGE = 2000
 const KEIN_WISSEN =
@@ -109,6 +109,17 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
   if ((aboAktiv && abo?.stufe === 'coach') || istTeam) sichtbarkeiten.push('premium')
   if (istTeam) sichtbarkeiten.push('trainer')
 
+  // Erst einrichten prüfen und Wissen suchen, dann speichern – so bleiben bei
+  // fehlender Einrichtung keine unbeantworteten Fragen im Verlauf zurück.
+  pruefeSprachmodell()
+  const [vektor] = await einbetten([frage])
+  const treffer = await suchen(
+    vektor,
+    { studioId: profil.studio_id, sichtbarkeiten },
+    Number(envOptional('SUCHE_ANZAHL') ?? '6'),
+    Number(envOptional('SUCHE_MINDESTSCORE') ?? '0.5'),
+  )
+
   // Verlauf
   let verlaufId = typeof body.verlauf_id === 'string' ? body.verlauf_id : ''
   if (verlaufId) {
@@ -163,15 +174,6 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
 
   const { data: studio } = await admin.from('studios').select('name').eq('id', profil.studio_id).single()
   const warn = pruefeWarnsignale(frage)
-
-  // Wissen suchen
-  const [vektor] = await einbetten([frage])
-  const treffer = await suchen(
-    vektor,
-    { studioId: profil.studio_id, sichtbarkeiten },
-    Number(envOptional('SUCHE_ANZAHL') ?? '6'),
-    Number(envOptional('SUCHE_MINDESTSCORE') ?? '0.5'),
-  )
 
   const sse = (fn: (schreibe: (o: unknown) => void) => Promise<void>) =>
     new Response(

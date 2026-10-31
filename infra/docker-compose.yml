@@ -1,0 +1,62 @@
+# KI-Dienste für Kruger Intelligenz auf dem eigenen VPS (z. B. Hostinger).
+#
+#   qdrant      Vektordatenbank für das Wissen
+#   embeddings  BGE-M3 (mehrsprachig, 1024 Dimensionen) über Infinity, OpenAI-kompatibel
+#   caddy       HTTPS mit automatischen Zertifikaten für beide Dienste
+#
+# Start:   cp .env.example .env  →  Werte eintragen  →  docker compose up -d
+# Prüfen:  curl -H "api-key: $QDRANT_API_KEY" https://$QDRANT_DOMAIN/collections
+#          curl -H "Authorization: Bearer $EMBEDDING_API_KEY" -H 'content-type: application/json' \
+#               -d '{"model":"BAAI/bge-m3","input":["Test"]}' https://$EMBEDDING_DOMAIN/embeddings
+#
+# Läuft auf dem VPS schon ein Qdrant (z. B. für andere Projekte), kann der
+# Dienst „qdrant“ entfallen – die App legt ihre Collection „wissen“ selbst an.
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.13.4
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY fehlt}
+    volumes:
+      - qdrant_daten:/qdrant/storage
+    expose:
+      - "6333"
+
+  embeddings:
+    # Für reproduzierbare Starts später eine feste Version eintragen (x.x.x-cpu)
+    image: michaelf34/infinity:latest-cpu
+    restart: unless-stopped
+    command: ["v2", "--model-id", "BAAI/bge-m3", "--engine", "torch", "--port", "7997"]
+    environment:
+      INFINITY_API_KEY: ${EMBEDDING_API_KEY:?EMBEDDING_API_KEY fehlt}
+    volumes:
+      - modell_cache:/app/.cache
+    expose:
+      - "7997"
+    # BGE-M3 braucht ca. 2,5 GB RAM
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      QDRANT_DOMAIN: ${QDRANT_DOMAIN:?QDRANT_DOMAIN fehlt}
+      EMBEDDING_DOMAIN: ${EMBEDDING_DOMAIN:?EMBEDDING_DOMAIN fehlt}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_daten:/data
+    depends_on:
+      - qdrant
+      - embeddings
+
+volumes:
+  qdrant_daten:
+  modell_cache:
+  caddy_daten:
