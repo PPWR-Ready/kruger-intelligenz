@@ -248,7 +248,8 @@ h1, h2, h3 { margin: 0; }
 
 /* Trainer-Modus: Livebild mit Skelett */
 .buehne { position: relative; width: 100%; aspect-ratio: 3 / 4; max-height: 62dvh; background: #111; border-radius: var(--radius-gross); overflow: hidden; }
-.buehne video, .buehne canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Fläche bleibt 3:4; das Bild füllt sie (Canvas hat dieselbe Pixelgröße wie das Video, wird also identisch zugeschnitten) */
+.buehne video, .buehne canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .buehne video.gespiegelt { transform: scaleX(-1); }
 .buehne-hinweis { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; text-align: center; padding: 24px; background: rgba(0, 0, 0, 0.6); }
 .buehne-hinweis.fehler { color: var(--critical); }

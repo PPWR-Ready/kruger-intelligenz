@@ -72,8 +72,11 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
       if (!v || !c || !erkennung || v.readyState < 2 || v.currentTime === letzteVideozeit) return
       letzteVideozeit = v.currentTime
       const jetzt = performance.now()
-      const lm = erkenne(erkennung, v, jetzt)
       const B = v.videoWidth, H = v.videoHeight
+      // Das Bild wird auf die 3:4-Fläche zugeschnitten (object-fit: cover). Punkte außerhalb
+      // des sichtbaren Ausschnitts gelten als nicht sichtbar – sonst würde die App mit
+      // Körperteilen rechnen, die man selbst nicht sieht, und nie „Bitte ganz ins Bild“ sagen.
+      const lm = imAusschnitt(erkenne(erkennung, v, jetzt), B, H, c.clientWidth, c.clientHeight)
       if (c.width !== B || c.height !== H) { c.width = B; c.height = H }
 
       if (lm.length && (!seite || jetzt - seiteGeprueft > 1000)) {
@@ -118,6 +121,16 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
       </button>
     </div>
   )
+}
+
+/** Setzt die Sichtbarkeit von Punkten außerhalb des zugeschnittenen Ausschnitts auf 0. */
+function imAusschnitt(lm: Punkt[], B: number, H: number, fb: number, fh: number): Punkt[] {
+  if (!lm.length || !B || !H || !fb || !fh) return lm
+  const massstab = Math.max(fb / B, fh / H)
+  const rx = (1 - fb / massstab / B) / 2, ry = (1 - fh / massstab / H) / 2
+  if (rx <= 0.001 && ry <= 0.001) return lm
+  const rand = 0.01 // kleiner Puffer, damit Punkte direkt am Rand nicht flackern
+  return lm.map((q) => (q.x < rx - rand || q.x > 1 - rx + rand || q.y < ry - rand || q.y > 1 - ry + rand ? { ...q, visibility: 0 } : q))
 }
 
 function zeichne(
