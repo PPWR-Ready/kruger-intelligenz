@@ -17,6 +17,11 @@ export interface Kontext {
   quellen: Quelle[]
 }
 
+/** Heutiges Datum in deutscher Zeit, z. B. „Sonntag, 1. November 2026“. */
+export function heute(): string {
+  return new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Berlin' })
+}
+
 export function baueSystemanweisung(k: Kontext): string {
   const teile: string[] = []
 
@@ -25,6 +30,7 @@ export function baueSystemanweisung(k: Kontext): string {
       'die das Five-Konzept für Rücken und Gelenke entwickelt haben. Five ist aktives Muskellängentraining: ' +
       'Muskeln werden unter Kraft gedehnt, nicht nur passiv gestretcht.',
   )
+  teile.push(`Heute ist ${heute()}. Befristete Aktionen aus den Quellen nennst du nur, solange sie noch gelten.`)
 
   teile.push(
     [

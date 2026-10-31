@@ -77,8 +77,18 @@ function MitgliedRahmen() {
   )
 }
 
+const TITEL: [RegExp, string][] = [
+  [/^\/assistent/, 'Chat'], [/^\/heute/, 'Heute'], [/^\/trainieren/, 'Training'], [/^\/fortschritt/, 'Fortschritt'],
+  [/^\/profil/, 'Profil'], [/^\/team/, 'Team'], [/^\/anmelden/, 'Anmelden'], [/^\/registrieren/, 'Registrieren'],
+]
+
 export default function App() {
   const s = useSitzung()
+  const ort = useLocation()
+  useEffect(() => {
+    const t = TITEL.find(([m]) => m.test(ort.pathname))?.[1]
+    document.title = t ? `${t} – Rückgrat` : 'Rückgrat'
+  }, [ort.pathname])
   // Nach der ersten echten Anzeige gilt der Start als erledigt (egal auf welcher Seite)
   useEffect(() => { if (!s.laedt) startGeprueft = true }, [s.laedt])
   if (s.laedt) return <main className="mitglied"><Laden text="Rückgrat wird geladen …" /></main>

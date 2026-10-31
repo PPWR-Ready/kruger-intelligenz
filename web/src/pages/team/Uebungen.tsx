@@ -5,7 +5,7 @@ import { fehlertext, supabase } from '../../lib/supabase'
 import { useSitzung } from '../../lib/sitzung'
 import { relativ } from '../../lib/zeit'
 import type { InhaltStatus, Uebung } from '../../lib/db'
-import { Fehler, Laden, useMitteilung } from '../../components/Bausteine'
+import { Ladefehler, Fehler, Laden, useMitteilung, useUngespeichertWarnung, verlassenOk } from '../../components/Bausteine'
 import { Icon } from '../../components/Icon'
 import { KameraBuehne, type Bild } from '../../components/KameraBuehne'
 import { GELENK, GELENKE, type GelenkId } from '../../lib/pose/geometrie'
@@ -26,11 +26,16 @@ type Zeile = Uebung & { updated_at: string }
 export function TeamUebungen() {
   const [zeilen, setZeilen] = useState<Zeile[] | null>(null)
   const [archiv, setArchiv] = useState(false)
+  const [ladefehler, setLadefehler] = useState<string | null>(null)
+  const [versuch, setVersuch] = useState(0)
 
   useEffect(() => {
     void supabase.from('uebungen').select('id, studio_id, name, kategorie, an_geraet, beschreibung, status, regeln, updated_at').order('name')
-      .then(({ data }) => setZeilen((data ?? []) as Zeile[]))
-  }, [])
+      .then(({ data, error }) => {
+        setLadefehler(error ? fehlertext(error) : null)
+        if (!error) setZeilen((data ?? []) as Zeile[])
+      })
+  }, [versuch])
 
   const liste = (zeilen ?? []).filter((z) => (archiv ? z.status === 'archiviert' : z.status !== 'archiviert'))
 
@@ -51,7 +56,7 @@ export function TeamUebungen() {
         <button className="chip" aria-pressed={archiv} onClick={() => setArchiv(true)}>Archiviert</button>
       </div>
 
-      {!zeilen ? <Laden /> : liste.length === 0 ? (
+      {ladefehler ? <Ladefehler text={ladefehler} erneut={() => setVersuch((v) => v + 1)} /> : !zeilen ? <Laden /> : liste.length === 0 ? (
         <div className="leer">{archiv ? 'Keine archivierten Übungen.' : 'Noch keine Übungen. Leg mit „Neue Übung“ los.'}</div>
       ) : (
         <div className="tabelle-rahmen">
@@ -83,6 +88,8 @@ let zaehler = 0
 const neueId = () => `p${Date.now().toString(36)}${(zaehler++).toString(36)}`
 
 export function TeamUebungEditor() {
+  const [geaendert, setGeaendert] = useState(false)
+  useUngespeichertWarnung(geaendert)
   const { id } = useParams()
   const neu = !id || id === 'neu'
   const s = useSitzung()
@@ -164,6 +171,7 @@ export function TeamUebungEditor() {
         const { error } = await supabase.from('freigaben').insert({ studio_id: s.profil.studio_id, typ: 'uebung', uebung_id: uid, eingereicht_von: s.profil.id, status: 'offen' })
         if (error) throw error
       }
+      setGeaendert(false)
       team.zaehlerNeuLaden()
       zeige(ziel === 'freigeben' ? 'Freigegeben – Mitglieder sehen die Übung jetzt' : ziel === 'einreichen' || status === 'eingereicht' ? 'Zur Freigabe eingereicht' : ziel === 'archivieren' ? 'Archiviert' : 'Gespeichert')
       if (neu && uid) navigate(`/team/uebungen/${uid}`, { replace: true })
@@ -183,7 +191,7 @@ export function TeamUebungEditor() {
     <>
       <header className="reihe zwischen" style={{ flexWrap: 'wrap' }}>
         <div className="stapel" style={{ gap: 4 }}>
-          <Link to="/team/uebungen" className="klein">← Alle Übungen</Link>
+          <Link to="/team/uebungen" className="klein" onClick={(ev) => { if (!verlassenOk(geaendert)) ev.preventDefault() }}>← Alle Übungen</Link>
           <h1 className="titel">{neu ? 'Neue Übung' : name || 'Übung'}</h1>
         </div>
         {!neu && <span className={`status ${STATUS[status].klasse}`}>{STATUS[status].text}</span>}
@@ -192,7 +200,7 @@ export function TeamUebungEditor() {
       {!darfBearbeiten && <div className="karte warnung"><p className="klein" style={{ margin: 0 }}>Five-Übungen können nur Admins ändern.</p></div>}
 
       <div className="editor-raster" style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', alignItems: 'start' }}>
-        <fieldset disabled={!darfBearbeiten} className="stapel" style={{ border: 0, padding: 0, margin: 0, gap: 16 }}>
+        <fieldset disabled={!darfBearbeiten} className="stapel" style={{ border: 0, padding: 0, margin: 0, gap: 16 }} onChangeCapture={() => setGeaendert(true)}>
           <section className="karte">
             <h2 className="untertitel">Übung</h2>
             <label className="feld"><span>Name</span><input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></label>
@@ -278,7 +286,7 @@ export function TeamUebungEditor() {
             ) : (
               status !== 'eingereicht' && <button type="button" className="knopf primaer" disabled={speichert || !pruefung.regeln} onClick={() => void speichern('einreichen')}>Zur Freigabe einreichen</button>
             )}
-            {!neu && status !== 'archiviert' && <button type="button" className="knopf still" disabled={speichert} onClick={() => void speichern('archivieren')}>Archivieren</button>}
+            {!neu && status !== 'archiviert' && <button type="button" className="knopf still" disabled={speichert} onClick={() => { if (confirm('Übung archivieren? Mitglieder sehen sie danach nicht mehr.')) void speichern('archivieren') }}>Archivieren</button>}
           </div>
         </fieldset>
 

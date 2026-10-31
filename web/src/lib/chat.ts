@@ -21,13 +21,26 @@ export async function frageStellen(
   eingabe: { frage: string; verlauf_id?: string | null; kontext?: 'chat' | 'trainer_modus'; uebung?: string },
   r: ChatRueckrufe,
 ): Promise<void> {
+  // Kommt 45 Sekunden lang nichts an, brechen wir ab, statt endlos zu warten
+  const abbruch = new AbortController()
+  let zeitUeberschritten = false
+  let wecker = 0
+  const weiterWarten = () => {
+    window.clearTimeout(wecker)
+    wecker = window.setTimeout(() => { zeitUeberschritten = true; abbruch.abort() }, 45_000)
+  }
+  weiterWarten()
+  const zuLange = 'Das hat gerade zu lange gedauert. Bitte versuch es noch einmal.'
   let antwort: Response
   try {
-    antwort = await funktion('chat', eingabe)
+    antwort = await funktion('chat', eingabe, abbruch.signal)
   } catch {
+    window.clearTimeout(wecker)
+    if (zeitUeberschritten) throw new Error(zuLange)
     throw new Error('Der Assistent ist gerade nicht erreichbar. Prüfe deine Internetverbindung und versuch es gleich noch einmal.')
   }
   if (!antwort.ok || !antwort.body) {
+    window.clearTimeout(wecker)
     let nachricht = 'Der Assistent ist gerade nicht erreichbar.'
     try {
       nachricht = (await antwort.json()).fehler ?? nachricht
@@ -37,6 +50,7 @@ export async function frageStellen(
   let fertig = false
   try {
     for await (const e of liesSse(antwort.body)) {
+      weiterWarten()
       const d = JSON.parse(e.data)
       if (d.typ === 'start') r.beimStart?.(d.verlauf_id)
       else if (d.typ === 'text') r.beimText(d.t)
@@ -44,8 +58,11 @@ export async function frageStellen(
       else if (d.typ === 'fehler') throw new Error(d.nachricht)
     }
   } catch (e) {
+    if (zeitUeberschritten) throw new Error(zuLange)
     if (e instanceof Error && !(e instanceof SyntaxError) && e.message && !/network|fetch|abort/i.test(e.message)) throw e
     throw new Error('Die Verbindung ist abgebrochen. Bitte versuch es noch einmal.')
+  } finally {
+    window.clearTimeout(wecker)
   }
   if (!fertig) throw new Error('Die Verbindung ist abgebrochen. Bitte versuch es noch einmal.')
 }

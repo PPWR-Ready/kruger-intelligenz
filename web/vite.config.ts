@@ -40,7 +40,7 @@ export default defineConfig({
     mediapipeWasm(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon-32.png', 'favicon-48.png', 'apple-touch-icon.png', 'logo.png'],
+      includeAssets: ['favicon-32.png', 'favicon-48.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Rückgrat Donaueschingen',
         short_name: 'Rückgrat',
@@ -61,7 +61,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // PDF-Leser und Haltungserkennung nur bei Bedarf laden, nicht vorab cachen
-        globIgnores: ['**/pdf.worker*', 'mediapipe/**'],
+        // Team-Werkzeuge (PDF, Word, Kamera-Erkennung) nur bei Bedarf laden, nicht bei jedem Mitglied vorab
+        globIgnores: ['**/pdf*', '**/lib-*', '**/vision_bundle*', 'mediapipe/**'],
         navigateFallback: '/index.html',
         // Supabase-Anfragen (Daten, Login, Edge Functions) nie aus dem Cache
         runtimeCaching: [

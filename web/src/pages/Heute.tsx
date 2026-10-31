@@ -91,6 +91,14 @@ export function Heute() {
         </Link>
       )}
 
+      <Link to="/trainieren" className="karte akzent" style={{ textDecoration: 'none', color: 'var(--text)', gap: 14, flexDirection: 'row', alignItems: 'center' }}>
+        <span className="avatar-lk" aria-hidden="true" style={{ background: 'var(--accent)', boxShadow: 'none' }}><Icon name="kamera" groesse={22} /></span>
+        <span className="stapel" style={{ gap: 2, flex: 1 }}>
+          <strong>Kamera-Coaching ausprobieren</strong>
+          <span className="klein leise">Die App zählt mit und sagt dir live, wenn du nachkorrigieren solltest.</span>
+        </span>
+        <Icon name="weiter" groesse={20} />
+      </Link>
     </div>
   )
 }

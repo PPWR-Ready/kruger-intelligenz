@@ -28,8 +28,8 @@ import { antworte, modell, pruefeSprachmodell, streameAntwort } from '../_shared
 
 const MAX_FRAGE = 2000
 const KEIN_WISSEN =
-  'Da will ich sichergehen und dir nichts Falsches sagen. Ich habe deine Frage an das Team weitergegeben; ' +
-  'die Antwort bekommst du hier in der App.'
+  'Da will ich sichergehen und dir nichts Falsches sagen. Ich habe deine Frage an das Team von Rückgrat weitergegeben – ' +
+  'du bekommst eine persönliche Antwort hier im Chat und unter „Heute“.'
 
 interface Profil {
   id: string

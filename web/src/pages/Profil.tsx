@@ -1,3 +1,4 @@
+import { DATENSCHUTZ_URL, Rechtliches } from '../components/Rechtliches'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fehlertext, supabase } from '../lib/supabase'
@@ -8,12 +9,11 @@ import { speichereEinwilligungen } from './Onboarding'
 import { Fehler, Schalter, useMitteilung } from '../components/Bausteine'
 import { Icon } from '../components/Icon'
 
-const DATENSCHUTZ_URL = (import.meta.env.VITE_DATENSCHUTZ_URL as string | undefined) ?? 'https://rueckgrat-donau.de/datenschutz'
 const KONTAKT = (import.meta.env.VITE_KONTAKT_EMAIL as string | undefined) ?? ''
 
 const EINWILLIGUNGEN: { art: EinwilligungArt; titel: string; text: string }[] = [
   { art: 'gesundheitsdaten', titel: 'Gesundheitsangaben nutzen', text: 'Ziele, Beschwerden und Befinden, damit Antworten und Pläne zu dir passen.' },
-  { art: 'kamera', titel: 'Kamera für den Trainer-Modus', text: 'Das Bild bleibt auf deinem Gerät. Gespeichert werden nur Skelett und Winkel.' },
+  { art: 'kamera', titel: 'Kamera für den Trainer-Modus', text: 'Das Bild bleibt auf deinem Gerät. Gespeichert werden nur Wiederholungen, Bewertung und Korrekturhinweise.' },
   { art: 'trainer_freigabe', titel: 'Trainer darf Fortschritt sehen', text: 'So kann dich das Team gezielt betreuen. Deine Chats sieht niemand.' },
 ]
 
@@ -126,7 +126,7 @@ export function Profil() {
           ) : (
             <>
               <span style={{ fontWeight: 600 }}>Mitgliedschaft</span>
-              <span className="klein leise">Der Assistent ist in deiner Mitgliedschaft enthalten. Das Coach-Abo mit Kamera-Coaching folgt.</span>
+              <span className="klein leise">Assistent und Kamera-Coaching sind in deiner Mitgliedschaft enthalten.</span>
             </>
           )}
         </div>
@@ -141,6 +141,7 @@ export function Profil() {
       </section>
 
       <button className="knopf kritisch voll" onClick={() => void s.abmelden()}><Icon name="abmelden" groesse={20} />Abmelden</button>
+      <Rechtliches />
       {mitteilung}
     </div>
   )

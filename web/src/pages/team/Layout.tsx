@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useRef, useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useSitzung } from '../../lib/sitzung'
@@ -27,6 +27,13 @@ export function TeamLayout() {
 
   useEffect(() => { void laden() }, [laden, ort.pathname])
 
+  // Auf dem Handy liegt das Menü als Leiste oben: aktiven Punkt ins Bild holen
+  const nav = useRef<HTMLElement>(null)
+  useEffect(() => {
+    nav.current?.querySelector('a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' })
+    window.scrollTo(0, 0)
+  }, [ort.pathname])
+
   const zahl = (n: number) => (n > 0 ? <span className="zaehler">{n}</span> : null)
 
   return (
@@ -36,7 +43,8 @@ export function TeamLayout() {
           <img src="/logo.png" alt="Rückgrat" width={150} height={95} style={{ width: 150, height: 'auto' }} />
           <span className="klein leise">Team · {s.profil?.anzeigename}</span>
         </div>
-        <nav className="team-nav" aria-label="Team-Bereich">
+        <nav className="team-nav" aria-label="Team-Bereich" ref={nav}>
+          <Link to="/assistent" className="nur-mobil" aria-label="Zur Mitglieder-App"><Icon name="zurueck" groesse={20} />App</Link>
           <NavLink to="/team" end><Icon name="team" groesse={20} />Übersicht</NavLink>
           <NavLink to="/team/rueckfragen"><Icon name="chat" groesse={20} />Rückfragen{zahl(z.rueckfragen)}</NavLink>
           <NavLink to="/team/wissen"><Icon name="buch" groesse={20} />Wissen</NavLink>

@@ -1,4 +1,5 @@
 // Willkommen, Registrierung, Anmeldung, Code einlösen und die Onboarding-Schritte.
+import { DATENSCHUTZ_URL, Rechtliches } from '../components/Rechtliches'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { supabase, fehlertext } from '../lib/supabase'
@@ -8,7 +9,6 @@ import { Fehler, Schalter, Schritte } from '../components/Bausteine'
 import { Icon } from '../components/Icon'
 
 const UEBER_DICH = 'kruger.ueberDich'
-const DATENSCHUTZ_URL = (import.meta.env.VITE_DATENSCHUTZ_URL as string | undefined) ?? 'https://rueckgrat-donau.de/datenschutz'
 
 type UeberDich = Pick<Gesundheitsprofil, 'ziele' | 'beschwerden' | 'trainings_pro_woche'>
 
@@ -23,15 +23,16 @@ export function Willkommen() {
           <span className="leise klein">Donaueschingen · seit 1993</span>
         </div>
         <div className="stapel">
-          <p className="eyebrow">Seit 1993 · Donaueschingen</p>
+          <p className="eyebrow">Deine Rückgrat-App</p>
           <h1 className="display display-xl">Die Quelle deiner Kraft. <span className="akzent-text">Jetzt in deiner Tasche.</span></h1>
           <p style={{ margin: 0, color: 'var(--text-soft)' }}>
-            Frag uns alles zu Training, Rücken, Ernährung und Gesundheit. Und trainiere mit Kamera-Coaching nach dem Five-Konzept.
+            Frag uns alles zu Training, Rücken, Ernährung und Gesundheit. Und trainiere mit Kamera-Coaching, das live mitzählt und dich korrigiert.
           </p>
         </div>
         <div className="unten">
-          <Link to="/registrieren" className="knopf primaer voll">Los geht's</Link>
+          <Link to="/registrieren" className="knopf primaer voll">Los geht’s</Link>
           <Link to="/anmelden" className="knopf still voll">Ich habe schon einen Zugang</Link>
+          <Rechtliches />
         </div>
       </div>
     </main>
@@ -55,6 +56,7 @@ export function Registrieren() {
     const sauber = code.trim().toUpperCase()
     if (!/^[A-Z0-9-]{4,20}$/.test(sauber)) return setFehler('Bitte gib den Einladungscode aus dem Studio ein.')
     if (!name.trim()) return setFehler('Bitte gib deinen Namen ein.')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail.trim())) return setFehler('Bitte gib eine gültige E-Mail-Adresse ein.')
     if (passwort.length < 8) return setFehler('Das Passwort muss mindestens 8 Zeichen haben.')
     setLaeuft(true)
     merkeCode(sauber, name.trim())
@@ -108,6 +110,7 @@ export function Registrieren() {
         <div className="unten">
           <button className="knopf primaer voll" disabled={laeuft}>{laeuft ? 'Einen Moment …' : 'Weiter'}</button>
           <Link to="/willkommen" className="knopf still voll">Zurück</Link>
+          <Rechtliches />
         </div>
       </form>
     </main>
@@ -151,6 +154,7 @@ export function Anmelden() {
         <div className="unten">
           <button className="knopf primaer voll" disabled={laeuft}>{laeuft ? 'Einen Moment …' : 'Anmelden'}</button>
           <button type="button" className="knopf still voll" onClick={vergessen}>Passwort vergessen</button>
+          <Rechtliches />
         </div>
       </form>
     </main>
@@ -279,7 +283,7 @@ export function UeberDichSchritt({ bearbeiten = false }: { bearbeiten?: boolean 
           <h2 className="untertitel" style={{ fontSize: 17 }}>Wie oft trainierst du pro Woche?</h2>
           <div className="raster-3" role="group" aria-label="Trainingshäufigkeit">
             {(['1-2', '3-4', '5+'] as const).map((h) => (
-              <button key={h} type="button" className="chip" aria-pressed={haeufigkeit === h} style={{ borderRadius: 8, justifyContent: 'center' }} onClick={() => setHaeufigkeit(haeufigkeit === h ? null : h)}>{h.replace('-', '–')} ×</button>
+              <button key={h} type="button" className="chip" aria-pressed={haeufigkeit === h} style={{ borderRadius: 8, justifyContent: 'center' }} onClick={() => setHaeufigkeit(haeufigkeit === h ? null : h)}>{h.replace('-', '–')}-mal</button>
             ))}
           </div>
         </div>
@@ -328,7 +332,7 @@ export function DatenschutzSchritt() {
         <Schritte aktuell={4} />
         <h1 className="display display-l">Deine Daten bleiben deine.</h1>
         <div className="karte"><Schalter an={werte.gesundheitsdaten} beiAenderung={setze('gesundheitsdaten')} titel="Gesundheitsangaben nutzen" text="Ziele, Beschwerden und Befinden, damit Antworten und Pläne zu dir passen." /></div>
-        <div className="karte"><Schalter an={werte.kamera} beiAenderung={setze('kamera')} titel="Kamera für den Trainer-Modus" text="Das Bild bleibt auf deinem Gerät. Gespeichert werden nur Skelett und Winkel." /></div>
+        <div className="karte"><Schalter an={werte.kamera} beiAenderung={setze('kamera')} titel="Kamera für den Trainer-Modus" text="Das Bild bleibt auf deinem Gerät. Gespeichert werden nur Wiederholungen, Bewertung und Korrekturhinweise." /></div>
         <div className="karte"><Schalter an={werte.trainer_freigabe} beiAenderung={setze('trainer_freigabe')} titel="Trainer darf Fortschritt sehen" text="So kann dich das Team gezielt betreuen. Deine Chats liest das Team nur, wenn eine Frage an das Team weitergegeben wird." /></div>
         <p className="klein leise" style={{ margin: 0 }}>Alles freiwillig und jederzeit im Profil änderbar. <a href={DATENSCHUTZ_URL} target="_blank" rel="noreferrer">Datenschutzerklärung lesen</a></p>
         <Fehler text={fehler} />
@@ -344,7 +348,7 @@ export function DatenschutzSchritt() {
 /* ------------------------------------------------------------ 5 Erste Frage */
 export function ErsteFrage() {
   const s = useSitzung()
-  const vorschlaege = ['Was hilft gegen meinen unteren Rücken?', 'Was ist das Five-Konzept genau?', 'Wie oft sollte ich pro Woche trainieren?']
+  const vorschlaege = ['Was ist das Five-Konzept genau?', 'Wie kann ich ein Probetraining machen?', 'Welche Five-Kurse gibt es in der Woche?']
   return (
     <main className="mitglied">
       <div className="seite ohne-tabs">
@@ -354,7 +358,7 @@ export function ErsteFrage() {
           <div><div style={{ fontWeight: 600 }}>Dein Assistent</div><div className="klein leise">Wissen aus dem Rückgrat-Team</div></div>
         </div>
         <div className="blase assistent" style={{ maxWidth: '100%' }}>
-          Hallo {vorname(s.profil)}, schön, dass du da bist. Ich kenne das Five-Konzept und das Wissen unseres Teams. Womit fangen wir an?
+          Hallo {vorname(s.profil)}, schön, dass du da bist. Ich kenne das Wissen unseres Teams rund um Five, Training und das Studio. Womit fangen wir an?
         </div>
         {!s.profil?.freigeschaltet && (
           <div className="karte warnung"><p className="klein" style={{ margin: 0 }}>Dein Zugang wird gerade vom Team freigeschaltet. Fragen kannst du stellen, sobald das erledigt ist.</p></div>
@@ -364,7 +368,7 @@ export function ErsteFrage() {
             <Link key={v} to={`/assistent?frage=${encodeURIComponent(v)}`} className="knopf" style={{ justifyContent: 'space-between', textAlign: 'left' }}>{v}<Icon name="weiter" groesse={18} /></Link>
           ))}
         </div>
-        <div className="unten"><Link to="/assistent" className="knopf primaer voll">Los geht's</Link></div>
+        <div className="unten"><Link to="/assistent" className="knopf primaer voll">Los geht’s</Link></div>
       </div>
     </main>
   )
