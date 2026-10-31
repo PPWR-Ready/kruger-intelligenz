@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { useSitzung } from './lib/sitzung'
 import { Laden } from './components/Bausteine'
@@ -50,6 +50,24 @@ function Geschuetzt({ stufe }: { stufe: 'konto' | 'profil' | 'fertig' | 'team' }
   return <Outlet />
 }
 
+/** Hauptseiten, von denen die App beim Start immer in einen neuen Chat springt. */
+const START_IN_CHAT = new Set(['/', '/heute', '/fortschritt', '/profil', '/trainieren'])
+let startGeprueft = false
+
+/**
+ * Beim Öffnen der App beginnt man im Chat – auch wenn der Browser die zuletzt
+ * offene Seite wiederherstellt oder die Verknüpfung auf eine andere Seite zeigt.
+ * Gilt nur einmal pro Start; Direktlinks (Übung, Team, Passwort) bleiben unberührt.
+ */
+function StartImChat() {
+  const ort = useLocation()
+  // Nur beim allerersten Anzeigen nach dem Start: Hauptseite → neuer Chat. Danach nie wieder.
+  const [umleiten, setUmleiten] = useState(() => !startGeprueft && START_IN_CHAT.has(ort.pathname) && !ort.search)
+  if (umleiten && ort.pathname === '/assistent') setUmleiten(false) // im Chat angekommen
+  useEffect(() => { startGeprueft = true }, [])
+  return umleiten && ort.pathname !== '/assistent' ? <Navigate to="/assistent" replace /> : <Outlet />
+}
+
 function MitgliedRahmen() {
   return (
     <main className="mitglied">
@@ -61,6 +79,8 @@ function MitgliedRahmen() {
 
 export default function App() {
   const s = useSitzung()
+  // Nach der ersten echten Anzeige gilt der Start als erledigt (egal auf welcher Seite)
+  useEffect(() => { if (!s.laedt) startGeprueft = true }, [s.laedt])
   if (s.laedt) return <main className="mitglied"><Laden text="Rückgrat wird geladen …" /></main>
 
   return (
@@ -83,6 +103,7 @@ export default function App() {
       </Route>
 
       <Route element={<Geschuetzt stufe="fertig" />}>
+        <Route element={<StartImChat />}>
         <Route element={<MitgliedRahmen />}>
           <Route path="/heute" element={<Heute />} />
           <Route path="/assistent" element={<Assistent />} />
@@ -90,6 +111,7 @@ export default function App() {
           <Route path="/fortschritt" element={<Fortschritt />} />
           <Route path="/fortschritt/neu" element={<EinheitErfassen />} />
           <Route path="/profil" element={<Profil />} />
+        </Route>
         </Route>
         <Route path="/profil/ziele" element={<UeberDichSchritt bearbeiten />} />
         <Route path="/trainieren/:id" element={<Suspense fallback={<main className="trainer"><Laden /></main>}><KameraTraining /></Suspense>} />
