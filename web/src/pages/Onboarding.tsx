@@ -350,7 +350,7 @@ export function ErsteFrage() {
       <div className="seite ohne-tabs">
         <Schritte aktuell={5} />
         <div className="reihe">
-          <div className="avatar-lk" aria-hidden="true">LK</div>
+          <div className="avatar-lk" aria-hidden="true"><img src="/signet.png" alt="" width={19} height={24} /></div>
           <div><div style={{ fontWeight: 600 }}>Dein Assistent</div><div className="klein leise">Wissen aus dem Rückgrat-Team</div></div>
         </div>
         <div className="blase assistent" style={{ maxWidth: '100%' }}>
@@ -364,7 +364,7 @@ export function ErsteFrage() {
             <Link key={v} to={`/assistent?frage=${encodeURIComponent(v)}`} className="knopf" style={{ justifyContent: 'space-between', textAlign: 'left' }}>{v}<Icon name="weiter" groesse={18} /></Link>
           ))}
         </div>
-        <div className="unten"><Link to="/heute" className="knopf primaer voll">Zur Startseite</Link></div>
+        <div className="unten"><Link to="/assistent" className="knopf primaer voll">Los geht's</Link></div>
       </div>
     </main>
   )

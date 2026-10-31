@@ -45,7 +45,7 @@ export function TeamLayout() {
           <NavLink to="/team/mitglieder"><Icon name="profil" groesse={20} />Mitglieder{zahl(z.neue)}</NavLink>
         </nav>
         <div className="stapel" style={{ marginTop: 'auto' }}>
-          <Link to="/heute" className="knopf klein still" style={{ justifyContent: 'flex-start' }}><Icon name="zurueck" groesse={18} />Zur Mitglieder-App</Link>
+          <Link to="/assistent" className="knopf klein still" style={{ justifyContent: 'flex-start' }}><Icon name="zurueck" groesse={18} />Zur Mitglieder-App</Link>
           <button className="knopf klein still" style={{ justifyContent: 'flex-start' }} onClick={() => void s.abmelden()}><Icon name="abmelden" groesse={18} />Abmelden</button>
         </div>
       </aside>

@@ -91,18 +91,6 @@ export function Heute() {
         </Link>
       )}
 
-      <section className="stapel">
-        <h2 className="untertitel" style={{ fontSize: 17 }}>Frag den Assistenten</h2>
-        <Link to="/assistent" className="karte" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '8px 8px 8px 16px', textDecoration: 'none' }}>
-          <span className="leise">Was möchtest du wissen?</span>
-          <span className="knopf rund" style={{ background: 'var(--accent)', color: '#121212', border: 0, width: 40, height: 40 }}><Icon name="mikro" groesse={20} /></span>
-        </Link>
-        <div className="chips">
-          {['Was hilft bei Nackenverspannung?', 'Was esse ich vor dem Training?'].map((f) => (
-            <Link key={f} to={`/assistent?frage=${encodeURIComponent(f)}`} className="chip">{f}</Link>
-          ))}
-        </div>
-      </section>
     </div>
   )
 }
