@@ -157,11 +157,12 @@ export function Assistent() {
     <div className="chat">
       <header className="chat-kopf">
         <span className="chat-kopf-platz" aria-hidden="true" />
-        <div className="chat-kopf-titel">
+        {/* Im leeren Chat steht das Logo groß in der Mitte – oben dann nichts doppelt */}
+        <div className={`chat-kopf-titel${leer ? ' versteckt' : ''}`} aria-hidden={leer}>
           <img src="/signet.png" alt="" width={19} height={24} />
           <h1>Rückgrat</h1>
         </div>
-        <button type="button" className="chat-kopf-knopf" onClick={neuesGespraech} aria-label="Neuer Chat" disabled={leer}>
+        <button type="button" className={`chat-kopf-knopf${leer ? ' versteckt' : ''}`} onClick={neuesGespraech} aria-label="Neuer Chat" disabled={leer}>
           <Icon name="neu" groesse={21} />
         </button>
       </header>
