@@ -5,7 +5,7 @@ import { useSitzung, vorname } from '../lib/sitzung'
 import { anTeamWeitergeben, frageStellen } from '../lib/chat'
 import { hoereZu, spracheingabeMoeglich, vorlesen } from '../lib/sprache'
 import { relativ } from '../lib/zeit'
-import type { ChatNachricht, Rueckfrage } from '../lib/db'
+import type { Rueckfrage } from '../lib/db'
 import { useFrageAusUrl } from './Onboarding'
 import { Icon } from '../components/Icon'
 import { Antworttext } from '../components/Antworttext'
@@ -21,12 +21,19 @@ interface Anzeige {
   laeuft?: boolean
 }
 
+/**
+ * Das laufende Gespräch lebt nur im Speicher der geöffneten App: Beim Wechsel
+ * zwischen Tabs bleibt es erhalten, beim nächsten Öffnen der App beginnt ein
+ * neuer Chat. Alte Verläufe bleiben in der Datenbank (z. B. für Rückfragen).
+ */
+let laufenderChat: { verlaufId: string | null; nachrichten: Anzeige[] } = { verlaufId: null, nachrichten: [] }
+
 export function Assistent() {
   const s = useSitzung()
   const navigate = useNavigate()
   const frageAusUrl = useFrageAusUrl()
-  const [verlaufId, setVerlaufId] = useState<string | null>(null)
-  const [nachrichten, setNachrichten] = useState<Anzeige[]>([])
+  const [verlaufId, setVerlaufId] = useState<string | null>(laufenderChat.verlaufId)
+  const [nachrichten, setNachrichten] = useState<Anzeige[]>(laufenderChat.nachrichten)
   const [rueckfragen, setRueckfragen] = useState<Rueckfrage[]>([])
   const [eingabe, setEingabe] = useState('')
   const [zwischen, setZwischen] = useState('')
@@ -38,21 +45,17 @@ export function Assistent() {
   const [kopiert, setKopiert] = useState<string | null>(null)
   const automatischGefragt = useRef(false)
 
-  // Letzten Verlauf und Antworten vom Team laden
+  // Gespräch für Tab-Wechsel merken (nicht über einen Neustart der App hinaus)
+  useEffect(() => {
+    laufenderChat = { verlaufId, nachrichten: nachrichten.filter((n) => !n.laeuft) }
+  }, [verlaufId, nachrichten])
+
+  // Antworten vom Team laden (alte Chat-Verläufe bewusst nicht: jeder Start ist ein neuer Chat)
   useEffect(() => {
     if (!s.profil) return
-    void (async () => {
-      const { data: v } = await supabase.from('chat_verlaeufe').select('id').eq('mitglied_id', s.profil!.id).eq('kontext', 'chat')
-        .order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (v && !frageAusUrl) {
-        setVerlaufId(v.id)
-        const { data: n } = await supabase.from('chat_nachrichten').select('*').eq('verlauf_id', v.id).order('created_at').returns<ChatNachricht[]>()
-        setNachrichten((n ?? []).filter((x) => x.rolle !== 'trainer').map((x) => ({ id: x.id, rolle: x.rolle as 'mitglied' | 'assistent', inhalt: x.inhalt, quellen: x.quellen, unsicher: x.unsicher })))
-      }
-      const { data: r } = await supabase.from('rueckfragen').select('*').eq('mitglied_id', s.profil!.id).order('created_at', { ascending: false }).limit(5)
-      setRueckfragen((r ?? []) as Rueckfrage[])
-    })()
-  }, [s.profil, frageAusUrl])
+    void supabase.from('rueckfragen').select('*').eq('mitglied_id', s.profil.id).order('created_at', { ascending: false }).limit(5)
+      .then(({ data }) => setRueckfragen((data ?? []) as Rueckfrage[]))
+  }, [s.profil])
 
   useEffect(() => { ende.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [nachrichten])
 
@@ -145,7 +148,8 @@ export function Assistent() {
     setNachrichten([])
   }
 
-  const beantwortet = rueckfragen.filter((r) => r.status === 'beantwortet')
+  // Team-Antworten 14 Tage lang oben zeigen, danach nur noch im Verlauf der Datenbank
+  const beantwortet = rueckfragen.filter((r) => r.status === 'beantwortet' && r.beantwortet_am && alterInTagen(r.beantwortet_am) <= 14)
   const offen = rueckfragen.filter((r) => r.status === 'offen')
   const leer = nachrichten.length === 0
 
@@ -248,6 +252,8 @@ export function Assistent() {
     </div>
   )
 }
+
+const alterInTagen = (iso: string) => (Date.now() - new Date(iso).getTime()) / 86400000
 
 const VORSCHLAEGE = [
   { titel: 'Nacken', frage: 'Was hilft gegen Verspannungen im Nacken?' },
