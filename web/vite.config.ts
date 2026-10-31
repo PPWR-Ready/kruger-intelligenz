@@ -40,7 +40,7 @@ export default defineConfig({
     mediapipeWasm(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon-32.png', 'favicon-48.png', 'apple-touch-icon.png', 'logo.png'],
       manifest: {
         name: 'Rückgrat Donaueschingen',
         short_name: 'Rückgrat',

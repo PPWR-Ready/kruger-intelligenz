@@ -33,7 +33,7 @@ export function TeamLayout() {
     <div className="team">
       <aside className="team-leiste">
         <div className="stapel" style={{ gap: 2 }}>
-          <span className="wortmarke">RÜCKGRAT</span>
+          <img src="/logo.png" alt="Rückgrat" width={150} height={95} style={{ width: 150, height: 'auto' }} />
           <span className="klein leise">Team · {s.profil?.anzeigename}</span>
         </div>
         <nav className="team-nav" aria-label="Team-Bereich">
