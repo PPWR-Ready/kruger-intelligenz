@@ -135,7 +135,7 @@ function RueckfrageKarte({ r, fertig }: { r: Zeile; fertig: (text: string) => vo
 
       <label className="reihe klein" style={{ gap: 8, cursor: 'pointer' }}>
         <input type="checkbox" checked={alsWissen} onChange={(e) => setAlsWissen(e.target.checked)} style={{ width: 20, height: 20 }} />
-        Auch als Wissen speichern{s.istGruender ? ' und freigeben' : ' (zur Freigabe durch die Gründer)'}
+        Auch als Wissen speichern{s.istGruender ? ' und freigeben' : ' (zur Freigabe durch einen Admin)'}
       </label>
       {alsWissen && (
         <div className="stapel" style={{ gap: 10 }}>

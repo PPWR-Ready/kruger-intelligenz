@@ -6,7 +6,7 @@ import type { Einladungscode, Profil, Rolle } from '../../lib/db'
 import { Fehler, Laden, useMitteilung } from '../../components/Bausteine'
 import { useTeam } from './Layout'
 
-const ROLLEN: Record<Rolle, string> = { mitglied: 'Mitglied', trainer: 'Trainer', gruender: 'Gründer' }
+const ROLLEN: Record<Rolle, string> = { mitglied: 'Mitglied', trainer: 'Trainer', gruender: 'Admin' }
 
 function neuerCode(): string {
   // ohne verwechselbare Zeichen (0/O, 1/I)
@@ -181,7 +181,7 @@ function Einladungen({ codes, neuLaden, zeige }: { codes: Einladungscode[]; neuL
             <select value={rolle} onChange={(e) => setRolle(e.target.value as Rolle)}>
               <option value="mitglied">Mitglieder</option>
               <option value="trainer">Trainer (sofort freigeschaltet)</option>
-              <option value="gruender">Gründer (sofort freigeschaltet)</option>
+              <option value="gruender">Admin (sofort freigeschaltet)</option>
             </select>
           </label>
         )}

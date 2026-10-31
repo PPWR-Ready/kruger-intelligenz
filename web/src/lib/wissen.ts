@@ -1,4 +1,4 @@
-// Speichern von Wissen: Gründer geben direkt frei, Trainer reichen zur Freigabe ein.
+// Speichern von Wissen: Admins geben direkt frei, Trainer reichen zur Freigabe ein.
 import { funktion, supabase } from './supabase'
 import type { Eingabeweg, Profil, Sichtbarkeit } from './db'
 
@@ -11,7 +11,7 @@ export interface WissenEingabe {
   inhalt: string
   eingabeweg: Eingabeweg
   rueckfrageId?: string
-  /** Five-Grundwissen für alle Studios (nur Gründer) */
+  /** Five-Grundwissen für alle Studios (nur Admins) */
   global: boolean
   /** Originaldateien (Upload oder Fotos), landen im privaten Bucket „wissen“ */
   dateien?: { blob: Blob; name: string; mime: string }[]

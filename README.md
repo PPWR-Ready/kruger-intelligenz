@@ -7,7 +7,7 @@ Erste Ausbaustufe: **Web-App (PWA)**, die auf Android und iOS wie eine App insta
 |---|---|
 | Mitglieder | Heute, Assistent (Antworten nur aus freigegebenem Wissen, Diktat, Vorlesen, Rückfragen ans Team), Trainieren (Übungsbibliothek, Kamera-Coaching folgt), Fortschritt mit Trainingstagebuch, Profil mit Einwilligungen und Datenexport |
 | Team | Übersicht mit Mitglieder-Ampel, Rückfragen beantworten (optional direkt als Wissen), Mitglieder freischalten, Rollen, Einladungscodes |
-| Wissens-Studio | Schreiben, Diktieren, Datei-Import (TXT, Markdown, PDF, Word), Seiten fotografieren mit Texterkennung, Versionen, Freigabe durch die Gründer |
+| Wissens-Studio | Schreiben, Diktieren, Datei-Import (TXT, Markdown, PDF, Word), Seiten fotografieren mit Texterkennung, Versionen, Freigabe durch einen Admin |
 
 ## Aufbau
 
@@ -26,7 +26,7 @@ Freigegebenes Wissen wird automatisch eingelesen: `pg_cron` prüft jede Minute, 
 ## Stand Supabase (Projekt `lqhkvxlxgatwuszxajrr`, Frankfurt)
 
 - Alle Migrationen eingespielt, Edge Functions `chat`, `wissen-indexieren`, `dokument-lesen` ausgeliefert
-- Studio „Rückgrat Donaueschingen“ angelegt, Gründer-Einladungscode erstellt (3 Nutzungen, 60 Tage gültig)
+- Studio „Rückgrat Donaueschingen“ angelegt, Admin-Einladungscode erstellt (3 Nutzungen, 60 Tage gültig)
 
 ## Betrieb (Stand 31.10.2026)
 
@@ -43,6 +43,10 @@ Die `*.srv1864263.hstgr.cloud`-Adressen nutzen den Wildcard-Eintrag des Hostinge
 **App aktualisieren:** auf dem VPS `/docker/kruger-app/aktualisieren.sh` (holt `main` aus GitHub und baut neu).
 
 **Eigene Domain später:** neue Adresse in `infra/vps-traefik/app/docker-compose.yml` (Traefik-Regel) eintragen, A-Record auf die VPS-IP, dann in Supabase Site URL, Redirect URLs und `ERLAUBTE_HERKUNFT` anpassen.
+
+## Rollen
+
+Mitglied, Trainer und **Admin**. Admin heißt intern (Datenbank, Code) weiterhin `gruender`; nur die Anzeige und die Fehlermeldungen sagen „Admin“.
 
 ## Konfiguration
 
@@ -86,16 +90,16 @@ Alternativ jede Hosting-Plattform für statische Seiten (Netlify, Vercel, Cloudf
 
 ### Erste Anmeldung
 
-1. App öffnen → *Los geht's* → Gründer-Einladungscode eingeben, registrieren, E-Mail bestätigen.
-2. Wer den Gründer-Code einlöst, ist sofort freigeschaltet und hat den Team-Bereich (Profil → *Team-Bereich öffnen*).
-3. Im Team-Bereich unter *Mitglieder* Codes für Trainer (nur Gründer) und Mitglieder erstellen; der Link führt direkt zur Registrierung mit eingetragenem Code.
+1. App öffnen → *Los geht's* → Admin-Einladungscode eingeben, registrieren, E-Mail bestätigen.
+2. Wer den Admin-Code einlöst, ist sofort freigeschaltet und hat den Team-Bereich (Profil → *Team-Bereich öffnen*).
+3. Im Team-Bereich unter *Mitglieder* Codes für Trainer (nur Admins) und Mitglieder erstellen; der Link führt direkt zur Registrierung mit eingetragenem Code.
 
 ## Trainer-Modus (Kamera-Coaching)
 
 - **Erkennung:** MediaPipe Pose (`@mediapipe/tasks-vision`, Modell `pose_landmarker_full`) läuft komplett im Browser. Das Kamerabild verlässt das Gerät nie; gespeichert werden nur Wiederholungen, Haltedauer, Bewertung und erkannte Korrekturen mit Winkel (`saetze`).
 - **Selbst ausgeliefert:** WASM-Dateien kommen aus `node_modules` nach `/mediapipe/<version>/wasm/`, das Modell lädt `web/scripts/modell-laden.mjs` beim Build (mit SHA-256-Prüfung) nach `public/mediapipe/`. Im Betrieb gibt es keine Abrufe bei Google. Nach dem ersten Start liegt alles im Cache des Geräts.
 - **Regeln je Übung** (`uebungen.regeln`, Logik in `web/src/lib/pose/regeln.ts`): zählendes Gelenk mit Ausgangs- und Umkehrwinkel bzw. Haltezeit, dazu Prüfungen (Gelenk, min/max, Phase, Meldung). Meldungen kommen nur bei falscher Haltung, erst wenn sie 0,35 s anhält, dieselbe höchstens alle 3,5 s.
-- **Pflege:** Team-Bereich → *Übungen*. Der *Kamera-Test* zeigt alle Winkel live und übernimmt den aktuellen Winkel per Knopf als Ausgangs- oder Umkehrwert. Trainer reichen ein, Gründer geben frei.
+- **Pflege:** Team-Bereich → *Übungen*. Der *Kamera-Test* zeigt alle Winkel live und übernimmt den aktuellen Winkel per Knopf als Ausgangs- oder Umkehrwert. Trainer reichen ein, Admins geben frei.
 - **Beispielübungen:** „Beispiel: Kniebeuge“, „Beispiel: Unterarmstütz“, „Beispiel: Schulterdrücken stehend“ sind allgemeine Testregeln, **nicht** das Five-Konzept. Archivieren, sobald echte Five-Übungen angelegt sind.
 - **Gelenke:** Knie, Hüfte, Ellbogen, Schulter, Sprunggelenk, Körperlinie (Schulter–Hüfte–Knöchel), Rumpfneigung (gegen die Senkrechte), Kopfhaltung. Gemessen wird die der Kamera zugewandte Seite.
 - **Zugang:** derzeit alle freigeschalteten Mitglieder. Für das Coach-Abo später in `KameraTraining.tsx` zusätzlich `hat_coach_abo()` prüfen.
