@@ -28,46 +28,51 @@ Freigegebenes Wissen wird automatisch eingelesen: `pg_cron` prüft jede Minute, 
 - Alle Migrationen eingespielt, Edge Functions `chat`, `wissen-indexieren`, `dokument-lesen` ausgeliefert
 - Studio „Rückgrat Donaueschingen“ angelegt, Gründer-Einladungscode erstellt (3 Nutzungen, 60 Tage gültig)
 
-## Noch einzurichten
+## Betrieb (Stand 31.10.2026)
 
-### 1. Geheimnisse der Edge Functions
+| Was | Wo |
+|---|---|
+| Web-App | `https://kruger-app.srv1864263.hstgr.cloud` (VPS, `/docker/kruger-app`) |
+| Qdrant | `https://kruger-qdrant.srv1864263.hstgr.cloud` (VPS, `/docker/kruger-ki`) |
+| Embeddings (BGE-M3) | `https://kruger-embed.srv1864263.hstgr.cloud/embeddings` (VPS, `/docker/kruger-ki`) |
+| Schlüssel für Qdrant/Embeddings | nur auf dem VPS in `/docker/kruger-ki/.env` und als Supabase-Secrets |
+| Mail-Absender (vorläufig) | `noreply@amstellogistics-epr.com` über `smtp.hostinger.com:465` |
+
+Die `*.srv1864263.hstgr.cloud`-Adressen nutzen den Wildcard-Eintrag des Hostinger-VPS, DNS ist dafür nicht nötig. HTTPS kommt vom vorhandenen Traefik aus `/docker/n8n` (Netz `web`, Resolver `mytlschallenge`). Die Compose-Dateien liegen in `infra/vps-traefik/`. `infra/docker-compose.yml` mit Caddy ist die Variante für einen leeren Server ohne Traefik; auf dem VPS würde Caddy mit Traefik um Port 80/443 kollidieren.
+
+**App aktualisieren:** auf dem VPS `/docker/kruger-app/aktualisieren.sh` (holt `main` aus GitHub und baut neu).
+
+**Eigene Domain später:** neue Adresse in `infra/vps-traefik/app/docker-compose.yml` (Traefik-Regel) eintragen, A-Record auf die VPS-IP, dann in Supabase Site URL, Redirect URLs und `ERLAUBTE_HERKUNFT` anpassen.
+
+## Konfiguration
+
+### Geheimnisse der Edge Functions
 
 Im Supabase-Dashboard unter *Edge Functions → Secrets* (nie im Code oder Chat):
 
 | Name | Pflicht | Wert |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | ja | Schlüssel aus der Claude Console |
-| `QDRANT_URL` | ja | z. B. `https://qdrant.deine-domain.de` |
-| `QDRANT_API_KEY` | empfohlen | wie in `infra/.env` |
-| `EMBEDDING_URL` | ja | z. B. `https://embeddings.deine-domain.de/embeddings` |
-| `EMBEDDING_API_KEY` | empfohlen | wie in `infra/.env` |
-| `ERLAUBTE_HERKUNFT` | empfohlen | Adresse der Web-App, z. B. `https://app.rueckgrat-donau.de` |
+| `QDRANT_URL` | ja | `https://kruger-qdrant.srv1864263.hstgr.cloud` |
+| `QDRANT_API_KEY` | ja | aus `/docker/kruger-ki/.env` |
+| `EMBEDDING_URL` | ja | `https://kruger-embed.srv1864263.hstgr.cloud/embeddings` |
+| `EMBEDDING_API_KEY` | ja | aus `/docker/kruger-ki/.env` |
+| `ERLAUBTE_HERKUNFT` | empfohlen | `https://kruger-app.srv1864263.hstgr.cloud` |
 | `LLM_MODELL` | nein | Standard `claude-sonnet-5-5` |
 | `LLM_AUFWAND` | nein | `low`, `medium` oder `high` |
-| `SUCHE_MINDESTSCORE` | nein | Standard `0.5`; höher = vorsichtiger |
+| `SUCHE_MINDESTSCORE` | nein | Standard `0.5`; höher = vorsichtiger. Messung mit BGE-M3: direkte Frage ≈ 0,65, umschriebene Frage ≈ 0,40, fachfremde Frage ≈ 0,29. Nach 20–30 echten Einträgen neu einstellen. |
 | `RATE_LIMIT_PRO_TAG` | nein | Standard 150 Fragen pro Person |
 | `ABO_PFLICHT` | nein | `true`, sobald der Assistent nur mit Abo nutzbar sein soll |
 
 **Später auf ein eigenes Modell umstellen:** `LLM_ANBIETER=openai`, `LLM_BASIS_URL=http://<gpu-server>:8000/v1`, `LLM_MODELL=<name>`, optional `LLM_API_KEY`. Jede OpenAI-kompatible Schnittstelle (vLLM, Ollama, LM Studio) funktioniert; die Texterkennung beim Fotografieren braucht dann ein Modell mit Bildverständnis.
 
-### 2. KI-Dienste auf dem VPS
+### Authentifizierung
 
-```bash
-cd infra && cp .env.example .env   # Schlüssel und Domains eintragen
-docker compose up -d
-```
+- *Authentication → URL Configuration:* Site URL = Adresse der App, Redirect URLs = `https://<app-domain>/**`
+- *Authentication → Emails → SMTP:* eigener Absender (ohne ihn schickt Supabase nur an das eigene Team)
+- *Authentication → Emails → Templates:* deutsche Vorlagen aus `supabase/email-vorlagen/`
 
-DNS: zwei A-Records (Qdrant, Embeddings) auf die IP des VPS. Läuft dort schon ein Qdrant, kann dieser genutzt werden; die App legt ihre Collection `wissen` selbst an. BGE-M3 braucht etwa 2,5 GB RAM.
-
-### 3. E-Mail-Versand (wichtig vor dem Start mit Mitgliedern)
-
-Der eingebaute Mailversand von Supabase schickt nur an Mitglieder des Supabase-Teams und nur wenige Mails pro Stunde. Für Registrierung und Passwort-Reset unter *Authentication → Emails → SMTP* einen eigenen Absender eintragen (z. B. Brevo, Resend oder das Postfach von Hostinger). Die Vorlagen dort auf Deutsch umstellen.
-
-### 4. Web-App ausliefern
-
-Unter *Authentication → URL Configuration* die Adresse der App als **Site URL** eintragen und unter **Redirect URLs** zusätzlich `https://<app-domain>/**`.
-
-Variante VPS (Docker):
+### Web-App auf einem anderen Server
 
 ```bash
 # im Hauptverzeichnis des Repos (die App nutzt Code aus supabase/functions/_shared)
@@ -79,7 +84,7 @@ docker run -d --restart unless-stopped -p 8080:80 kruger-web
 
 Alternativ jede Hosting-Plattform für statische Seiten (Netlify, Vercel, Cloudflare Pages): Build `npm run build` im Ordner `web`, Ausgabe `dist`, alle Pfade auf `index.html` umleiten.
 
-### 5. Erste Anmeldung
+### Erste Anmeldung
 
 1. App öffnen → *Los geht's* → Gründer-Einladungscode eingeben, registrieren, E-Mail bestätigen.
 2. Wer den Gründer-Code einlöst, ist sofort freigeschaltet und hat den Team-Bereich (Profil → *Team-Bereich öffnen*).
