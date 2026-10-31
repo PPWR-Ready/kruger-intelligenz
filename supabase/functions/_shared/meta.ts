@@ -9,6 +9,8 @@ const META_ENDE = '>>>'
 export interface AntwortMeta {
   unsicher: boolean
   quellen: number[]
+  /** Nur im Smalltalk-Modus (ohne Wissen): true = fachliche Frage, ans Team weitergeben. */
+  fachfrage: boolean
 }
 
 export class MetaSplitter {
@@ -59,6 +61,7 @@ export function liesMeta(zeile: string): AntwortMeta | null {
       quellen: Array.isArray(roh.quellen)
         ? roh.quellen.filter((q): q is number => Number.isInteger(q) && q > 0)
         : [],
+      fachfrage: roh.fachfrage === true,
     }
   } catch {
     return null

@@ -77,6 +77,36 @@ export function baueSystemanweisung(k: Kontext): string {
 }
 
 /**
+ * Anweisung, wenn zur Frage kein freigegebenes Wissen passt: Der Assistent darf
+ * nur Begrüßung, Smalltalk und Fragen zur Bedienung der App beantworten. Alles
+ * Fachliche wird als Fachfrage markiert und ans Team weitergegeben – auch im
+ * Zweifel, damit nichts ohne das Wissen der Gründer beantwortet wird.
+ */
+export function baueSmalltalkAnweisung(k: Pick<Kontext, 'vorname' | 'studioName' | 'kontext'>): string {
+  return [
+    `Du bist der digitale Assistent von ${k.studioName} und duzt die Person (Vorname: ${k.vorname}). ` +
+      'Zu ihrer Nachricht gibt es kein passendes Wissen des Studios.',
+    [
+      'Du darfst NUR selbst antworten bei:',
+      '- Begrüßung, Dank, Verabschiedung, Smalltalk, Fragen wie „Bist du online?“ oder „Wer bist du?“',
+      '- Fragen zur Bedienung der App: Assistent (Fragen stellen, Antworten kommen aus dem Wissen des Studios, sonst antwortet das Team), ' +
+        '„Trainieren“ mit Kamera-Coaching (Übung mit Kamera-Symbol wählen, Handy seitlich aufstellen oder halten lassen, die App zählt und meldet Fehler, das Bild bleibt auf dem Gerät), ' +
+        '„Fortschritt“ (Einheiten und Rückenbefinden), „Profil“ (Ziele, Einwilligungen, Daten herunterladen).',
+      '',
+      'Alles andere ist eine Fachfrage und wird an das Team weitergegeben: Training, Übungen, Technik, Trainingspläne, Ernährung, ' +
+        'Gesundheit, Schmerzen, Beschwerden, Körper, das Five-Konzept, Öffnungszeiten, Preise, Termine und alles über das Studio. ' +
+        'Im Zweifel ist es eine Fachfrage. Erfinde nie Fakten über das Studio.',
+      '',
+      'Bei Smalltalk oder App-Fragen: antworte warm und kurz (höchstens 60 Wörter, keine Überschriften) und beende die Antwort mit der Zeile',
+      '<<<META{"fachfrage":false}>>>',
+      'Bei einer Fachfrage: schreibe KEINEN Text, sondern nur genau diese Zeile:',
+      '<<<META{"fachfrage":true}>>>',
+    ].join('\n'),
+    k.kontext === 'trainer_modus' ? 'Die Person trainiert gerade; antworte höchstens in einem Satz.' : '',
+  ].filter(Boolean).join('\n\n')
+}
+
+/**
  * Bringt den bisherigen Verlauf in die Form, die die Messages-API verlangt:
  * abwechselnd user/assistant, beginnend und endend mit user.
  */

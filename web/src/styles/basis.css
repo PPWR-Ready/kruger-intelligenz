@@ -141,7 +141,7 @@ h1, h2, h3 { margin: 0; }
 .chat-kopf { position: sticky; top: 0; background: var(--bg); padding: 16px 20px 12px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; z-index: 5; }
 .chat-verlauf { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; padding-bottom: calc(var(--tabbar) + 90px); }
 .blase { max-width: 88%; padding: 12px 14px; font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
-.blase.mitglied { align-self: flex-end; background: var(--surface-light); color: #121212; border-radius: 16px 16px 4px 16px; }
+.blase.eigene { align-self: flex-end; background: var(--surface-light); color: #121212; border-radius: 16px 16px 4px 16px; }
 .blase.assistent { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; display: flex; flex-direction: column; gap: 10px; }
 .blase .quelle { font-size: 13px; color: var(--muted); white-space: normal; }
 .chat-eingabe { position: fixed; left: 50%; transform: translateX(-50%); bottom: var(--tabbar); width: 100%; max-width: 480px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-end; z-index: 9; }
