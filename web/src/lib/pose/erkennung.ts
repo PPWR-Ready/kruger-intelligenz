@@ -66,6 +66,20 @@ export async function kameraStarten(video: HTMLVideoElement, richtung: Kamera): 
   return strom
 }
 
+/** Kann diese Kamera ihr Licht einschalten? (Android/Chrome mit Rückkamera; viele iPhones erlauben es im Browser nicht.) */
+export function lichtMoeglich(strom: MediaStream | null): boolean {
+  const spur = strom?.getVideoTracks()[0]
+  const faehig = spur?.getCapabilities?.() as (MediaTrackCapabilities & { torch?: boolean }) | undefined
+  return !!faehig?.torch
+}
+
+/** Schaltet das Kameralicht an oder aus. */
+export async function lichtSchalten(strom: MediaStream | null, an: boolean): Promise<void> {
+  const spur = strom?.getVideoTracks()[0]
+  if (!spur) return
+  await spur.applyConstraints({ advanced: [{ torch: an } as MediaTrackConstraintSet] })
+}
+
 export function kameraStoppen(strom: MediaStream | null): void {
   strom?.getTracks().forEach((t) => t.stop())
 }
