@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { SitzungProvider } from './lib/sitzung'
 import App from './App'
 // Schriften lokal ausgeliefert (kein Abruf bei Google, DSGVO)
+import '@fontsource/playfair-display/latin-400.css'
 import '@fontsource/inter/latin-400.css'
 import '@fontsource/inter/latin-500.css'
 import '@fontsource/inter/latin-600.css'

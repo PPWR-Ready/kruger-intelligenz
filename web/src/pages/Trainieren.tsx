@@ -35,7 +35,7 @@ export function Trainieren() {
             const kamera = mitKamera(u)
             const inhalt = (
               <>
-                <span className="label-klein" style={{ color: 'var(--accent)' }}>
+                <span className="label-klein" style={{ color: 'var(--accent-text)' }}>
                   {u.studio_id ? 'Studio' : 'Five'}{u.kategorie ? ` · ${u.kategorie}` : ''}{u.an_geraet ? ' · am Gerät' : ''}
                 </span>
                 <h3 style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>

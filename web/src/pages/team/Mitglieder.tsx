@@ -195,7 +195,7 @@ function Einladungen({ codes, neuLaden, zeige }: { codes: Einladungscode[]; neuL
           <div key={c.code} className="reihe zwischen" style={{ borderTop: '1px solid var(--line)', paddingTop: 8, flexWrap: 'wrap', gap: 6 }}>
             <div className="stapel" style={{ gap: 2 }}>
               <span style={{ fontWeight: 600, fontFamily: 'ui-monospace, monospace', opacity: gueltig(c) ? 1 : 0.5 }}>{c.code}</span>
-              <span className="klein leise">{c.rolle !== 'mitglied' && <strong style={{ color: 'var(--accent)' }}>{ROLLEN[c.rolle]} · </strong>}{c.genutzt}/{c.max_nutzungen} genutzt{c.gueltig_bis ? ` · bis ${datumKurz(c.gueltig_bis)}` : ''}{gueltig(c) ? '' : ' · abgelaufen'}</span>
+              <span className="klein leise">{c.rolle !== 'mitglied' && <strong style={{ color: 'var(--accent-text)' }}>{ROLLEN[c.rolle]} · </strong>}{c.genutzt}/{c.max_nutzungen} genutzt{c.gueltig_bis ? ` · bis ${datumKurz(c.gueltig_bis)}` : ''}{gueltig(c) ? '' : ' · abgelaufen'}</span>
             </div>
             <div className="reihe" style={{ gap: 6 }}>
               {gueltig(c) && <button className="knopf klein" onClick={() => void kopieren(c.code)}>Link kopieren</button>}
