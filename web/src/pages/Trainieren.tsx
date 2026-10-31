@@ -17,7 +17,7 @@ export function Trainieren() {
 
   return (
     <div className="seite">
-      <h1 className="titel">Trainieren</h1>
+      <h1 className="titel">Training</h1>
 
       <section className="karte akzent">
         <p className="eyebrow">Kamera-Coaching</p>

@@ -28,7 +28,7 @@ function ziel(s: ReturnType<typeof useSitzung>): string {
   if (!s.session) return '/willkommen'
   if (!s.profil) return '/zugang'
   if (!s.onboardingFertig) return '/start/ueber-dich'
-  return '/heute'
+  return '/assistent'
 }
 
 /** Nur ohne Anmeldung (Willkommen, Registrieren, Anmelden). */
@@ -46,7 +46,7 @@ function Geschuetzt({ stufe }: { stufe: 'konto' | 'profil' | 'fertig' | 'team' }
   if (!s.profil) return <Navigate to="/zugang" replace />
   if (stufe === 'profil') return <Outlet />
   if (!s.onboardingFertig) return <Navigate to="/start/ueber-dich" replace />
-  if (stufe === 'team' && !s.istTeam) return <Navigate to="/heute" replace />
+  if (stufe === 'team' && !s.istTeam) return <Navigate to="/assistent" replace />
   return <Outlet />
 }
 

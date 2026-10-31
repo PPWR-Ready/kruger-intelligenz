@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useSitzung } from '../lib/sitzung'
+import { useSitzung, vorname } from '../lib/sitzung'
 import { anTeamWeitergeben, frageStellen } from '../lib/chat'
 import { hoereZu, spracheingabeMoeglich, vorlesen } from '../lib/sprache'
 import { relativ } from '../lib/zeit'
 import type { ChatNachricht, Rueckfrage } from '../lib/db'
 import { useFrageAusUrl } from './Onboarding'
 import { Icon } from '../components/Icon'
+import { Antworttext } from '../components/Antworttext'
 
 interface Anzeige {
   id: string
@@ -33,6 +34,8 @@ export function Assistent() {
   const [hoert, setHoert] = useState(false)
   const stopp = useRef<() => void>(() => {})
   const ende = useRef<HTMLDivElement>(null)
+  const feld = useRef<HTMLTextAreaElement>(null)
+  const [kopiert, setKopiert] = useState<string | null>(null)
   const automatischGefragt = useRef(false)
 
   // Letzten Verlauf und Antworten vom Team laden
@@ -52,6 +55,22 @@ export function Assistent() {
   }, [s.profil, frageAusUrl])
 
   useEffect(() => { ende.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [nachrichten])
+
+  // Eingabefeld wächst mit dem Text (bis zur CSS-Höchsthöhe)
+  useEffect(() => {
+    const f = feld.current
+    if (!f) return
+    f.style.height = 'auto'
+    f.style.height = `${f.scrollHeight}px`
+  }, [eingabe, zwischen])
+
+  async function kopieren(id: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setKopiert(id)
+      window.setTimeout(() => setKopiert((k) => (k === id ? null : k)), 1500)
+    } catch { /* Zwischenablage nicht erlaubt: ignorieren */ }
+  }
 
   const senden = useCallback(async (text: string) => {
     const frage = text.trim()
@@ -128,39 +147,46 @@ export function Assistent() {
 
   const beantwortet = rueckfragen.filter((r) => r.status === 'beantwortet')
   const offen = rueckfragen.filter((r) => r.status === 'offen')
+  const leer = nachrichten.length === 0
 
   return (
     <div className="chat">
       <header className="chat-kopf">
-        <div className="avatar-lk" aria-hidden="true">LK</div>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 17, fontWeight: 600 }}>Assistent</h1>
-          <p className="klein leise" style={{ margin: 0 }}>Wissen aus dem Rückgrat-Team</p>
+        <span className="chat-kopf-platz" aria-hidden="true" />
+        <div className="chat-kopf-titel">
+          <img src="/signet.png" alt="" width={19} height={24} />
+          <h1>Rückgrat</h1>
         </div>
-        {nachrichten.length > 0 && <button className="knopf klein still" onClick={neuesGespraech}>Neues Gespräch</button>}
+        <button type="button" className="chat-kopf-knopf" onClick={neuesGespraech} aria-label="Neuer Chat" disabled={leer}>
+          <Icon name="neu" groesse={21} />
+        </button>
       </header>
 
-      <div className="chat-verlauf" aria-live="polite">
+      <div className={`chat-verlauf${leer ? ' leer-start' : ''}`} aria-live="polite">
         {beantwortet.slice(0, 2).map((r) => (
-          <div key={r.id} className="karte warnung" style={{ gap: 8 }}>
-            <span className="label-klein" style={{ color: 'var(--warning)' }}>Antwort vom Team · {relativ(r.beantwortet_am ?? r.created_at)}</span>
-            <span className="klein leise">Deine Frage: „{r.frage}“</span>
-            <span style={{ fontSize: 16, whiteSpace: 'pre-wrap' }}>{r.antwort}</span>
-          </div>
+          <article key={r.id} className="team-antwort">
+            <p className="team-antwort-kopf">Antwort vom Team · {relativ(r.beantwortet_am ?? r.created_at)}</p>
+            <p className="team-antwort-frage">„{r.frage}“</p>
+            <Antworttext text={r.antwort ?? ''} />
+          </article>
         ))}
         {offen.length > 0 && (
-          <div className="karte" style={{ gap: 6 }}>
-            <span className="label-klein">Beim Team nachgefragt</span>
-            {offen.map((r) => <span key={r.id} className="klein">„{r.frage}“ · {relativ(r.created_at)}</span>)}
-          </div>
+          <p className="chat-hinweis">
+            {offen.length === 1 ? 'Eine Frage liegt' : `${offen.length} Fragen liegen`} gerade beim Team. Die Antwort erscheint hier.
+          </p>
         )}
 
-        {nachrichten.length === 0 && (
-          <div className="stapel" style={{ marginTop: 12 }}>
-            <p className="leise" style={{ margin: 0 }}>Stell deine Frage zu Training, Rücken, Ernährung oder Gesundheit.</p>
-            <div className="chips">
-              {['Was hilft gegen Verspannungen im Nacken?', 'Wie oft pro Woche trainieren?', 'Gibt es Übungen fürs Büro?'].map((f) => (
-                <button key={f} className="chip" onClick={() => void senden(f)}>{f}</button>
+        {leer && (
+          <div className="chat-start">
+            <img src="/signet.png" alt="" width={57} height={72} className="chat-start-signet" />
+            <h2>Hallo {vorname(s.profil)}.</h2>
+            <p>Frag mich zu Training, Rücken, Ernährung oder Gesundheit.</p>
+            <div className="vorschlaege">
+              {VORSCHLAEGE.map((v) => (
+                <button key={v.frage} type="button" className="vorschlag" onClick={() => void senden(v.frage)}>
+                  <span className="vorschlag-titel">{v.titel}</span>
+                  <span className="vorschlag-text">{v.frage}</span>
+                </button>
               ))}
             </div>
           </div>
@@ -170,23 +196,33 @@ export function Assistent() {
           n.rolle === 'mitglied' ? (
             <div key={n.id} className="blase eigene">{n.inhalt}</div>
           ) : n.rolle === 'system' ? (
-            <div key={n.id} className="karte kritisch" role="alert" style={{ fontSize: 15 }}>{n.inhalt}</div>
+            <div key={n.id} className="chat-fehler" role="alert"><Icon name="warnung" groesse={18} />{n.inhalt}</div>
           ) : (
-            <div key={n.id} className="blase assistent">
-              <span className={n.laeuft ? 'tippt' : undefined}>{n.inhalt}</span>
-              {!n.laeuft && (
-                <>
-                  {!!n.quellen?.length && <span className="quelle">Aus dem Wissen von Rückgrat: {n.quellen.map((q) => q.titel).join(' · ')}</span>}
-                  <div className="reihe" style={{ gap: 8, flexWrap: 'wrap' }}>
-                    <button className="knopf klein still" onClick={() => vorlesen(n.inhalt)} aria-label="Antwort vorlesen"><Icon name="lautsprecher" groesse={18} />Vorlesen</button>
-                    {n.unsicher && !n.rueckfrage && !n.id.startsWith('neu-') && (
-                      n.weitergegeben
-                        ? <span className="klein" style={{ color: 'var(--success)' }}>An das Team weitergegeben</span>
-                        : <button className="knopf klein" onClick={() => void weitergeben(n.id)}>Beim Team nachfragen</button>
-                    )}
-                  </div>
-                </>
-              )}
+            <div key={n.id} className="antwort">
+              <img src="/signet.png" alt="" width={19} height={24} className={`antwort-signet${n.laeuft ? ' denkt' : ''}`} />
+              <div className="antwort-inhalt">
+                {n.laeuft && !n.inhalt ? (
+                  <span className="tippt-punkte" aria-label="Antwort wird geschrieben"><i /><i /><i /></span>
+                ) : (
+                  <Antworttext text={n.inhalt} />
+                )}
+                {!n.laeuft && (
+                  <>
+                    {!!n.quellen?.length && <p className="quelle">Aus dem Wissen von Rückgrat: {n.quellen.map((q) => q.titel).join(', ')}</p>}
+                    <div className="antwort-aktionen">
+                      <button type="button" className="aktion" onClick={() => vorlesen(n.inhalt.replace(/[*_#`]+/g, ''))} aria-label="Vorlesen" title="Vorlesen"><Icon name="lautsprecher" groesse={18} /></button>
+                      <button type="button" className="aktion" onClick={() => void kopieren(n.id, n.inhalt)} aria-label="Kopieren" title="Kopieren">
+                        <Icon name={kopiert === n.id ? 'haken' : 'kopieren'} groesse={18} />
+                      </button>
+                      {n.unsicher && !n.rueckfrage && !n.id.startsWith('neu-') && (
+                        n.weitergegeben
+                          ? <span className="aktion-text erledigt">An das Team weitergegeben</span>
+                          : <button type="button" className="aktion-text" onClick={() => void weitergeben(n.id)}>Beim Team nachfragen</button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           ),
         )}
@@ -194,19 +230,28 @@ export function Assistent() {
       </div>
 
       <form className="chat-eingabe" onSubmit={absenden}>
-        <label htmlFor="frage" className="nur-screenreader">Deine Frage</label>
-        <textarea id="frage" rows={1} value={hoert && zwischen ? `${eingabe} ${zwischen}`.trim() : eingabe} onChange={(e) => setEingabe(e.target.value)} onKeyDown={taste}
-          placeholder={hoert ? 'Ich höre zu …' : 'Frag mich etwas …'} maxLength={2000} />
-        {spracheingabeMoeglich() && (
-          <button type="button" className="knopf rund" onClick={mikro} aria-label={hoert ? 'Spracheingabe beenden' : 'Frage sprechen'} aria-pressed={hoert}
-            style={{ background: hoert ? 'var(--critical)' : 'var(--surface)', color: hoert ? '#121212' : 'var(--text)', border: 0 }}>
-            <Icon name={hoert ? 'stopp' : 'mikro'} groesse={22} />
+        <div className="eingabe-pille">
+          <label htmlFor="frage" className="nur-screenreader">Deine Frage</label>
+          <textarea id="frage" ref={feld} rows={1} value={hoert && zwischen ? `${eingabe} ${zwischen}`.trim() : eingabe}
+            onChange={(e) => setEingabe(e.target.value)} onKeyDown={taste}
+            placeholder={hoert ? 'Ich höre zu …' : 'Frag Rückgrat …'} maxLength={2000} />
+          {spracheingabeMoeglich() && (
+            <button type="button" className={`pillen-knopf${hoert ? ' aufnahme' : ''}`} onClick={mikro} aria-label={hoert ? 'Spracheingabe beenden' : 'Frage sprechen'} aria-pressed={hoert}>
+              <Icon name={hoert ? 'stopp' : 'mikro'} groesse={20} />
+            </button>
+          )}
+          <button className="pillen-knopf senden" disabled={beschaeftigt || !eingabe.trim()} aria-label="Senden">
+            <Icon name="hoch" groesse={20} staerke={2.4} />
           </button>
-        )}
-        <button className="knopf rund" disabled={beschaeftigt || !eingabe.trim()} aria-label="Senden" style={{ background: 'var(--accent)', color: '#121212', border: 0 }}>
-          <Icon name="senden" groesse={22} staerke={2} />
-        </button>
+        </div>
       </form>
     </div>
   )
 }
+
+const VORSCHLAEGE = [
+  { titel: 'Nacken', frage: 'Was hilft gegen Verspannungen im Nacken?' },
+  { titel: 'Rhythmus', frage: 'Wie oft pro Woche sollte ich trainieren?' },
+  { titel: 'Kamera-Coaching', frage: 'Wie funktioniert das Training mit Kamera?' },
+  { titel: 'Five-Konzept', frage: 'Was ist das Five-Konzept genau?' },
+]
