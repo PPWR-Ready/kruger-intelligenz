@@ -305,3 +305,35 @@ h1, h2, h3 { margin: 0; }
 .warnkarte { background: var(--critical-tint); border-left: 4px solid var(--critical); border-radius: 12px; padding: 12px 14px; }
 .warnkarte-kopf { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--critical); }
 .countdown { font-family: var(--font-display); font-size: 88px; line-height: 1; text-align: center; color: var(--accent-text); padding: 8px 0; font-variant-numeric: tabular-nums; animation: auftauchen 0.4s ease both; }
+.meldung.lob { background: var(--success-tint); color: var(--success); }
+.halte-ring { position: relative; width: 88px; height: 88px; flex-shrink: 0; display: grid; place-items: center; }
+.halte-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.halte-ring .spur { fill: none; stroke: var(--surface-2); stroke-width: 8; }
+.halte-ring .lauf { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.15s linear; }
+.halte-ring.fertig .lauf { stroke: var(--success); }
+.halte-ring.pausiert .lauf { stroke: var(--critical); }
+.halte-zahl { font-family: var(--font-display); font-size: 34px; line-height: 1; margin-top: -10px; font-variant-numeric: tabular-nums; }
+.halte-text { position: absolute; bottom: 17px; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.reichweite { display: flex; flex-direction: column; gap: 6px; }
+.reichweite-kopf { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--muted); }
+.reichweite-lob { color: var(--success); }
+.reichweite-bahn { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); }
+.reichweite-fuellung { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: linear-gradient(90deg, #f6c66a, var(--accent)); transition: width 0.12s linear; }
+.reichweite-ziel { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); opacity: 0.5; }
+.reichweite-best { position: absolute; top: -6px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--success); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+.uebung-karte { display: flex; align-items: stretch; gap: 14px; padding: 10px; background: var(--surface); border-radius: var(--radius-gross); box-shadow: var(--schatten); text-decoration: none; color: inherit; transition: transform 0.1s, box-shadow 0.15s; }
+a.uebung-karte:active { transform: scale(0.985); }
+a.uebung-karte:hover { box-shadow: 0 2px 4px rgba(38, 30, 20, 0.06), 0 8px 24px rgba(38, 30, 20, 0.09); }
+.uebung-bild-flaeche { flex-shrink: 0; width: 112px; border-radius: 16px; background: linear-gradient(160deg, #f6efe4, #e9dcc8); display: grid; place-items: center; }
+.uebungs-bild .glied { fill: none; stroke: #2a2622; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
+.uebungs-bild .kopf { fill: #2a2622; }
+.uebungs-bild .marke { fill: var(--accent); stroke: #fff; stroke-width: 1.5; }
+.uebungs-bild .boden { stroke: rgba(42, 38, 34, 0.25); stroke-width: 2; stroke-linecap: round; }
+.uebungs-bild .ring-spur { fill: rgba(255, 255, 255, 0.7); stroke: rgba(42, 38, 34, 0.12); stroke-width: 3; }
+.uebungs-bild .ring-lauf { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
+.uebung-text { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 6px 4px 6px 0; }
+.uebung-kategorie { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); }
+.uebung-name { font-family: var(--font-display); font-weight: 400; font-size: 23px; line-height: 1.15; }
+.uebung-fakten { display: flex; flex-wrap: wrap; gap: 6px; }
+.uebung-fakten span { font-size: 13px; padding: 3px 9px; border-radius: 10px; background: var(--surface-2); color: var(--text-soft); }
+.uebung-start { margin-top: 2px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--accent-text); }

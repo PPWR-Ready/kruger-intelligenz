@@ -27,6 +27,11 @@ export interface Regeln {
   zaehlen: { gelenk: GelenkId; start: number; umkehr: number } | null
   /** Halten: Zielzeit in Sekunden. */
   halten_sekunden: number | null
+  /**
+   * Wiederholungen: In der Endposition (so weit wie möglich) so viele Sekunden halten,
+   * bevor die Wiederholung zählt. null = nicht halten. Five-Standard: 10.
+   */
+  endhalten_sekunden?: number | null
   ziel_wiederholungen: number | null
   pruefungen: Pruefung[]
 }
@@ -45,7 +50,8 @@ export function leereRegeln(modus: Modus = 'wiederholungen'): Regeln {
     modus,
     zaehlen: modus === 'wiederholungen' ? { gelenk: 'knie', start: 170, umkehr: 100 } : null,
     halten_sekunden: modus === 'halten' ? 30 : null,
-    ziel_wiederholungen: modus === 'wiederholungen' ? 10 : null,
+    endhalten_sekunden: modus === 'wiederholungen' ? 10 : null,
+    ziel_wiederholungen: modus === 'wiederholungen' ? 5 : null,
     pruefungen: [],
   }
 }
@@ -81,6 +87,10 @@ export function leseRegeln(roh: unknown): { regeln: Regeln | null; fehler: strin
 
   const halten = zahl(r.halten_sekunden)
   if (modus === 'halten' && (halten === null || halten < 3)) fehler.push('Die Haltezeit muss mindestens 3 Sekunden betragen.')
+  const endhalten = zahl(r.endhalten_sekunden)
+  if (modus === 'wiederholungen' && endhalten !== null && endhalten > 0 && (endhalten < 2 || endhalten > 120)) {
+    fehler.push('Die Haltezeit in der Endposition muss zwischen 2 und 120 Sekunden liegen (0 = nicht halten).')
+  }
 
   const pruefungen: Pruefung[] = []
   const liste = Array.isArray(r.pruefungen) ? r.pruefungen : []
@@ -105,6 +115,7 @@ export function leseRegeln(roh: unknown): { regeln: Regeln | null; fehler: strin
       modus,
       zaehlen,
       halten_sekunden: modus === 'halten' ? halten : null,
+      endhalten_sekunden: modus === 'wiederholungen' && endhalten ? endhalten : null,
       ziel_wiederholungen: modus === 'wiederholungen' ? zahl(r.ziel_wiederholungen) : null,
       pruefungen,
     },
@@ -147,10 +158,17 @@ export interface Stand {
   korrekturen: Korrektur[]
   /** 0 = Ausgangsstellung, 1 = Umkehrpunkt (nur Wiederholungen). */
   fortschritt: number | null
+  /** Weiteste Bewegung im Satz (Fortschritt, kann über 1 liegen) und der Winkel dazu. */
+  bestFortschritt: number | null
+  bestWinkel: number | null
+  /** Halten in der Endposition: verbleibende Sekunden (null = gerade nicht am Halten). */
+  halteRest: number | null
+  /** Halten in der Endposition: geschafft für die laufende Wiederholung. */
+  gehaltenInWdh: boolean
 }
 
 export interface Ereignis {
-  art: 'fehler' | 'nicht_im_bild' | 'unvollstaendig' | 'wiederholung' | 'fertig'
+  art: 'fehler' | 'nicht_im_bild' | 'unvollstaendig' | 'wiederholung' | 'fertig' | 'halten_start' | 'halten_zaehlen' | 'halten_fertig'
   text: string
 }
 
@@ -162,6 +180,9 @@ const NICHT_IM_BILD_PAUSE_MS = 6000
 
 export const MELDUNG_NICHT_IM_BILD = 'Bitte ganz ins Bild.'
 export const MELDUNG_UNVOLLSTAENDIG = 'Bewegung nicht vollständig.'
+export const MELDUNG_HALTEN_START = 'Halten – und wenn es geht, noch ein Stück weiter.'
+export const MELDUNG_HALTEN_FERTIG = 'Sehr gut. Und langsam lösen.'
+export const meldungZuKurz = (s: number) => `Bitte die Endposition ${s} Sekunden halten.`
 
 /**
  * Wertet Bild für Bild aus. Fehlermeldungen kommen nur bei falscher Haltung,
@@ -185,6 +206,12 @@ export class Auswertung {
   private startZeit: number | null = null
   private zustand: Zustand = 'bereit'
   private fortschritt: number | null = null
+  private bestFortschritt: number | null = null
+  private bestWinkel: number | null = null
+  private endHaltMs = 0
+  private haeltGerade = false
+  private gehaltenInWdh = false
+  private letzteAnsage = -1
   private readonly benoetigt: GelenkId[]
   private readonly r: Regeln
 
@@ -218,7 +245,8 @@ export class Auswertung {
     if (this.r.modus === 'wiederholungen' && this.r.zaehlen) {
       const { gelenk, start, umkehr } = this.r.zaehlen
       const f = ((w[gelenk] as number) - start) / (umkehr - start)
-      this.fortschritt = Math.max(0, Math.min(1.2, f))
+      this.fortschritt = Math.max(0, Math.min(1.5, f))
+      if (this.bestFortschritt === null || f > this.bestFortschritt) { this.bestFortschritt = f; this.bestWinkel = Math.round(w[gelenk] as number) }
       phaseJetzt = f >= 0.7 ? 'umkehr' : f < 0.25 ? 'start' : 'bewegung'
     }
 
@@ -266,10 +294,44 @@ export class Auswertung {
       this.maxFortschritt = f
     } else if (this.phase === 'bewegung') {
       this.maxFortschritt = Math.max(this.maxFortschritt, f)
-      if (f >= 0.85) this.umkehrErreicht = true
+      const soll = this.r.endhalten_sekunden ?? 0
+      if (!soll) {
+        if (f >= 0.85) this.umkehrErreicht = true
+      } else if (!this.gehaltenInWdh) {
+        // Endposition: ab 85 % beginnen, Zone erst unter 70 % verlassen (Hysterese).
+        // Weiter in die Bewegung gehen ist ausdrücklich erwünscht.
+        if (!this.haeltGerade && f >= 0.85) {
+          this.haeltGerade = true
+          this.endHaltMs = 0
+          this.letzteAnsage = soll
+          ereignisse.push({ art: 'halten_start', text: MELDUNG_HALTEN_START })
+        } else if (this.haeltGerade && f < 0.7) {
+          this.haeltGerade = false
+          this.endHaltMs = 0
+        }
+        if (this.haeltGerade) {
+          if (this.aktiv.size === 0) this.endHaltMs += dt // bei Fehlhaltung pausiert die Uhr
+          const rest = Math.ceil(soll - this.endHaltMs / 1000)
+          if (rest <= 0) {
+            this.gehaltenInWdh = true
+            this.umkehrErreicht = true
+            this.haeltGerade = false
+            ereignisse.push({ art: 'halten_fertig', text: MELDUNG_HALTEN_FERTIG })
+          } else if (rest < this.letzteAnsage) {
+            this.letzteAnsage = rest
+            if (rest <= 3 || rest === 5) ereignisse.push({ art: 'halten_zaehlen', text: String(rest) })
+          }
+        }
+      }
       if (f < 0.2) {
         this.phase = 'start'
-        if (this.umkehrErreicht) {
+        const zuKurz = !!soll && !this.gehaltenInWdh && this.maxFortschritt >= 0.85
+        this.haeltGerade = false
+        this.gehaltenInWdh = false
+        this.endHaltMs = 0
+        if (zuKurz) {
+          if (this.darfMelden('__zukurz', t, MELDUNG_PAUSE_MS)) ereignisse.push({ art: 'unvollstaendig', text: meldungZuKurz(soll) })
+        } else if (this.umkehrErreicht) {
           this.wdh += 1
           this.bewertungen.push(this.fehlerInWdh.size === 0 ? 'sauber' : 'anpassen')
           ereignisse.push({ art: 'wiederholung', text: String(this.wdh) })
@@ -295,6 +357,10 @@ export class Auswertung {
       aktiveFehler: this.r.pruefungen.filter((p) => this.aktiv.has(p.id)),
       korrekturen: [...this.korrekturen],
       fortschritt: this.fortschritt,
+      bestFortschritt: this.bestFortschritt,
+      bestWinkel: this.bestWinkel,
+      halteRest: this.haeltGerade && this.r.endhalten_sekunden ? Math.max(0, this.r.endhalten_sekunden - this.endHaltMs / 1000) : null,
+      gehaltenInWdh: this.gehaltenInWdh,
     }
   }
 

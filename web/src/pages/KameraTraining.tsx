@@ -33,6 +33,8 @@ export function KameraTraining() {
   const [schritt, setSchritt] = useState<Schritt>('vorbereitung')
   const [stand, setStand] = useState<Stand | null>(null)
   const [meldung, setMeldung] = useState<string | null>(null)
+  /** Positive Hinweise (Halten, Lösen) – anders gefärbt als Fehler */
+  const [hinweis, setHinweis] = useState<string | null>(null)
   const [ton, setTon] = useState(tonGespeichert)
   const [saetze, setSaetze] = useState<GespeicherterSatz[]>([])
   const [einheitId, setEinheitId] = useState<string | null>(null)
@@ -108,6 +110,13 @@ export function KameraTraining() {
     for (const e of ereignisse) {
       if (e.art === 'wiederholung') { if (!a.stand().aktiveFehler.length) sprich(e.text); continue }
       if (e.art === 'fertig') { sprich(e.text); setStand(a.stand()); setSchritt('satz_ende'); continue }
+      if (e.art === 'halten_zaehlen') { sprich(e.text); continue }
+      if (e.art === 'halten_start' || e.art === 'halten_fertig') {
+        setHinweis(e.text)
+        sprich(e.text)
+        hinweisBis.current = b.zeit + 3000
+        continue
+      }
       setMeldung(e.text)
       sprich(e.text)
       if (e.art !== 'fehler') hinweisBis.current = b.zeit + 2500
@@ -118,7 +127,7 @@ export function KameraTraining() {
       const st = a.stand()
       setStand(st)
       if (st.aktiveFehler.length) setMeldung(st.aktiveFehler[0].meldung)
-      else if (st.zustand === 'laeuft' && b.zeit > hinweisBis.current) setMeldung(null)
+      else if (st.zustand === 'laeuft' && b.zeit > hinweisBis.current) { setMeldung(null); setHinweis(null) }
     }
   }, [sprich])
 
@@ -254,6 +263,12 @@ export function KameraTraining() {
 
       {schritt === 'vorbereitung' && (
         <section className="stapel">
+          {regeln.endhalten_sekunden && (
+            <div className="karte akzent klein" style={{ gap: 4 }}>
+              <strong>So geht’s</strong>
+              <span>Geh so weit in die Bewegung, wie es gut geht, und halte die Endposition {regeln.endhalten_sekunden} Sekunden. Die App zählt für dich herunter – erst dann zählt die Wiederholung.</span>
+            </div>
+          )}
           <p className="klein leise" style={{ margin: 0 }}>{ansichtHinweis(regeln)}{uebung.beschreibung ? ` ${uebung.beschreibung}` : ''}</p>
           {countdown !== null ? (
             <div className="countdown" role="status" aria-live="assertive">{countdown}</div>
@@ -267,17 +282,23 @@ export function KameraTraining() {
 
       {schritt === 'satz' && stand && (
         <section className="stapel">
-          <div className="zaehlwerk" aria-live="polite">
-            <span className="zahl">{regeln.modus === 'halten' ? `${stand.gehalten}s` : stand.wiederholungen}</span>
-            <span className="leise">{ziel}</span>
+          <div className="reihe zwischen" style={{ flexWrap: 'nowrap', alignItems: 'center' }}>
+            <div className="zaehlwerk" aria-live="polite">
+              <span className="zahl">{regeln.modus === 'halten' ? `${stand.gehalten}s` : stand.wiederholungen}</span>
+              <span className="leise">{ziel}</span>
+            </div>
+            {regeln.endhalten_sekunden && (stand.halteRest !== null || stand.gehaltenInWdh) && (
+              <HalteRing rest={stand.gehaltenInWdh ? 0 : stand.halteRest ?? 0} gesamt={regeln.endhalten_sekunden} pausiert={stand.aktiveFehler.length > 0} />
+            )}
           </div>
+          {regeln.modus === 'wiederholungen' && <Reichweite fortschritt={stand.fortschritt} best={stand.bestFortschritt} />}
           {regeln.modus === 'wiederholungen' && stand.bewertungen.length > 0 && (
             <div className="wdh-punkte" aria-label={`${stand.bewertungen.filter((b) => b === 'sauber').length} saubere Wiederholungen`}>
               {stand.bewertungen.map((b, i) => <span key={i} className={b} title={b === 'sauber' ? 'sauber' : 'mit Korrektur'} />)}
             </div>
           )}
-          <div className={`meldung ${meldung ? 'fehler' : 'ruhig'}`} role="status" aria-live="assertive">
-            {meldung ? <><Icon name="warnung" groesse={22} />{meldung}</> : stand.zustand === 'laeuft' ? 'Haltung wird geprüft' : 'Stell dich so hin, dass dein ganzer Körper zu sehen ist.'}
+          <div className={`meldung ${meldung ? 'fehler' : hinweis ? 'lob' : 'ruhig'}`} role="status" aria-live="assertive">
+            {meldung ? <><Icon name="warnung" groesse={22} />{meldung}</> : hinweis ? <><Icon name="haken" groesse={22} />{hinweis}</> : stand.zustand === 'laeuft' ? 'Haltung wird geprüft' : 'Stell dich so hin, dass dein ganzer Körper zu sehen ist.'}
           </div>
           {frage && <FrageKarte frage={frage} schliessen={() => { vorlesenStoppen(); setFrage(null) }} />}
           <div className="knopfreihe">
@@ -345,7 +366,40 @@ function ohneMarkdown(t: string): string {
 
 function zielText(r: Regeln): string {
   if (r.modus === 'halten') return `von ${r.halten_sekunden} s sauber gehalten`
-  return r.ziel_wiederholungen ? `von ${r.ziel_wiederholungen} Wiederholungen` : 'Wiederholungen'
+  const halten = r.endhalten_sekunden ? ` · je ${r.endhalten_sekunden} s halten` : ''
+  return (r.ziel_wiederholungen ? `von ${r.ziel_wiederholungen} Wiederholungen` : 'Wiederholungen') + halten
+}
+
+/** Kreis, der beim Halten in der Endposition herunterläuft. */
+function HalteRing({ rest, gesamt, pausiert }: { rest: number; gesamt: number; pausiert: boolean }) {
+  const r = 38, umfang = 2 * Math.PI * r
+  const anteil = Math.max(0, Math.min(1, rest / gesamt))
+  const fertig = rest <= 0
+  return (
+    <div className={`halte-ring${fertig ? ' fertig' : ''}${pausiert ? ' pausiert' : ''}`} role="timer" aria-label={fertig ? 'Gehalten' : `Noch ${Math.ceil(rest)} Sekunden halten`}>
+      <svg viewBox="0 0 88 88" width="88" height="88" aria-hidden="true">
+        <circle cx="44" cy="44" r={r} className="spur" />
+        <circle cx="44" cy="44" r={r} className="lauf" strokeDasharray={umfang} strokeDashoffset={umfang * (1 - anteil)} />
+      </svg>
+      <span className="halte-zahl">{fertig ? '✓' : Math.ceil(rest)}</span>
+      <span className="halte-text">{fertig ? 'gehalten' : pausiert ? 'Haltung!' : 'halten'}</span>
+    </div>
+  )
+}
+
+/** Wie weit die Bewegung gerade geht – mit Markierung für das Ziel und den Bestwert im Satz. */
+function Reichweite({ fortschritt, best }: { fortschritt: number | null; best: number | null }) {
+  const skala = (f: number | null) => `${Math.round(Math.max(0, Math.min(1, (f ?? 0) / 1.3)) * 100)}%`
+  return (
+    <div className="reichweite" aria-hidden="true">
+      <div className="reichweite-kopf"><span>So weit wie möglich</span>{best !== null && best > 0.85 && <span className="reichweite-lob">Bestwert</span>}</div>
+      <div className="reichweite-bahn">
+        <div className="reichweite-fuellung" style={{ width: skala(fortschritt) }} />
+        <div className="reichweite-ziel" style={{ left: skala(0.85) }} />
+        {best !== null && best > 0.05 && <div className="reichweite-best" style={{ left: skala(best) }} />}
+      </div>
+    </div>
+  )
 }
 
 function ansichtHinweis(r: Regeln): string {
@@ -367,7 +421,7 @@ function SatzZusammenfassung({ regeln, stand }: { regeln: Regeln; stand: Stand }
       {(regeln.modus === 'halten' ? stand.gehalten === 0 : stand.wiederholungen === 0) ? (
         <p className="klein" style={{ margin: 0 }}>Noch nichts erkannt. Stell das Handy so auf, dass dein ganzer Körper zu sehen ist, und versuch es noch einmal.</p>
       ) : gruppen.size === 0 ? (
-        <p className="klein" style={{ margin: 0 }}>Keine Korrekturen nötig.</p>
+        <p className="klein" style={{ margin: 0 }}>Keine Korrekturen nötig.{regeln.zaehlen && stand.bestWinkel !== null ? ` Weiteste Bewegung: ${GELENK[regeln.zaehlen.gelenk].name} ${stand.bestWinkel}°.` : ''}</p>
       ) : (
         <ul className="klein" style={{ margin: 0, paddingLeft: 18 }}>
           {[...gruppen].map(([text, liste]) => (
