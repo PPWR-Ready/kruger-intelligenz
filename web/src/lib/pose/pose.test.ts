@@ -1,9 +1,9 @@
 // Tests für Winkelberechnung und Regel-Auswertung des Trainer-Modus.
-import { P, besteSeite, gelenkwinkel, neigungZurSenkrechten, winkel, type GelenkId, type Punkt } from './geometrie'
+import { GELENKE, P, besteSeite, gelenkwinkel, neigungZurSenkrechten, winkel, type GelenkId, type Punkt } from './geometrie'
 import { Auswertung, MELDUNG_HALTEN_FERTIG, MELDUNG_HALTEN_START, MELDUNG_NICHT_IM_BILD, leseRegeln, meldungZuKurz, satzQualitaet, type Regeln } from './regeln'
 
 const leer = (): Record<GelenkId, number | null> =>
-  ({ knie: null, huefte: null, ellbogen: null, schulter: null, sprunggelenk: null, koerperlinie: null, rumpfneigung: null, kopfhaltung: null })
+  Object.fromEntries(GELENKE.map((g) => [g.id, null])) as Record<GelenkId, number | null>
 
 describe('winkel', () => {
   it('rechter Winkel', () => {

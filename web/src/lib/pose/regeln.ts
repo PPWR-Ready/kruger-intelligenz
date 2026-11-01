@@ -4,6 +4,7 @@
 
 import { GELENK, type GelenkId } from './geometrie'
 import { istFigurPose, type FigurPose } from './figur'
+import { istVornPose, type VornPose } from './figurVorn'
 
 export type Ansicht = 'seitlich' | 'frontal'
 export type Modus = 'wiederholungen' | 'halten'
@@ -37,6 +38,29 @@ export interface Regeln {
   pruefungen: Pruefung[]
   /** Ausgangs- und Endposition der Figur (Editor-Marionette bzw. vermessenes Foto/Video). */
   figur?: { start: FigurPose; ende: FigurPose } | null
+  /** Dasselbe von vorn gesehen (Ansicht „frontal“, Bewegung zur Seite). */
+  figur_vorn?: { start: VornPose; ende: VornPose } | null
+}
+
+/** Standard-Zählgelenk je Ansicht. */
+export const STANDARD_ZAEHLEN: Record<Ansicht, { gelenk: GelenkId; start: number; umkehr: number }> = {
+  seitlich: { gelenk: 'knie', start: 170, umkehr: 100 },
+  frontal: { gelenk: 'seitneigung', start: 0, umkehr: 30 },
+}
+
+/**
+ * Kamera-Ansicht wechseln: Zählgelenk und automatisch erzeugte Prüfungen passen
+ * nur zu einer Ansicht und werden dafür neu gesetzt bzw. entfernt.
+ */
+export function ansichtWechseln(r: Regeln, a: Ansicht): Regeln {
+  if (r.ansicht === a) return r
+  const passt = (g: GelenkId) => GELENK[g].ebene === a
+  return {
+    ...r,
+    ansicht: a,
+    zaehlen: r.zaehlen && !passt(r.zaehlen.gelenk) ? { ...STANDARD_ZAEHLEN[a] } : r.zaehlen,
+    pruefungen: r.pruefungen.filter((p) => !p.id.startsWith('auto-') || passt(p.gelenk)),
+  }
 }
 
 export const PHASEN: { id: Phase; name: string }[] = [
@@ -124,6 +148,10 @@ export function leseRegeln(roh: unknown): { regeln: Regeln | null; fehler: strin
       figur: (() => {
         const f = r.figur as { start?: unknown; ende?: unknown } | null | undefined
         return f && istFigurPose(f.start) && istFigurPose(f.ende) ? { start: f.start, ende: f.ende } : null
+      })(),
+      figur_vorn: (() => {
+        const f = r.figur_vorn as { start?: unknown; ende?: unknown } | null | undefined
+        return f && istVornPose(f.start) && istVornPose(f.ende) ? { start: f.start, ende: f.ende } : null
       })(),
     },
     fehler,
