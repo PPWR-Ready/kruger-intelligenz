@@ -217,6 +217,68 @@ export function setzeWinkel(p: FigurPose, g: GelenkId, ziel: number): FigurPose 
 }
 
 
+// --- 3D: Figur aus Weltpunkten (jede Blickrichtung) ------------------------
+
+type V3 = [number, number, number]
+const v3 = (q: Punkt): V3 => [q.x, q.y, q.z ?? 0]
+const minus = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+const punktProd = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+const kreuz = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+const norm = (a: V3): V3 => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l] }
+
+/** Querachse des Körpers (links → rechts) aus Hüften und Schultern. */
+function querachse(welt: Punkt[]): V3 {
+  const h = minus(v3(welt[P.hueftR]), v3(welt[P.hueftL])), s = minus(v3(welt[P.schulterR]), v3(welt[P.schulterL]))
+  return norm([h[0] + s[0], h[1] + s[1], h[2] + s[2]])
+}
+
+/**
+ * Wie seitlich die Kamera steht: 1 = genau von der Seite, 0 = genau von vorn/hinten.
+ * (Die Querachse des Körpers zeigt dann in die Bildtiefe.)
+ */
+export function seitlichkeit(welt: Punkt[] | null): number | null {
+  if (!welt || welt.length < 33) return null
+  return Math.abs(querachse(welt)[2])
+}
+
+/**
+ * Figur aus 3D-Weltpunkten: der Körper wird auf seine Seitenebene projiziert –
+ * so entsteht eine Seitenansicht, egal ob von vorn, schräg oder seitlich gefilmt.
+ */
+export function ausWeltpunkten(welt: Punkt[], seite: Seite): FigurPose | null {
+  if (welt.length < 33) return null
+  const r = seite === 'rechts' ? 1 : 0
+  const quer = querachse(welt)
+  // Senkrechte: Bild-y (nach unten), ohne Anteil der Querachse
+  const unten0: V3 = [0, 1, 0]
+  const unten = norm(minus(unten0, quer.map((q) => q * punktProd(unten0, quer)) as V3))
+  let vorn = norm(kreuz(unten, quer))
+  // Blickrichtung: Fußspitze liegt vor dem Knöchel
+  const fussVor = minus(v3(welt[P.fussL + r]), v3(welt[P.knoechelL + r]))
+  if (punktProd(fussVor, vorn) < 0) vorn = vorn.map((q) => -q) as V3
+  const idx: Record<Anker, number> = {
+    kopf: P.ohrL + r, schulter: P.schulterL + r, ellbogen: P.ellbogenL + r, hand: P.handgelenkL + r,
+    huefte: P.hueftL + r, knie: P.knieL + r, fuss: P.knoechelL + r, zeh: P.fussL + r,
+  }
+  const roh = {} as Record<Anker, XY>
+  for (const a of Object.keys(idx) as Anker[]) {
+    const q = v3(welt[idx[a]])
+    roh[a] = [punktProd(q, vorn), punktProd(q, unten)]
+  }
+  return einpassen(roh)
+}
+
+/** Rohkoordinaten (Figur schaut nach rechts) in die 0–100-Fläche einpassen, Füße unten. */
+function einpassen(roh: Record<Anker, XY>): FigurPose {
+  const xs = Object.values(roh).map((q) => q[0]), ys = Object.values(roh).map((q) => q[1])
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
+  const s = 80 / Math.max(x1 - x0, y1 - y0, 1e-6)
+  const versatzX = 50 - ((x1 - x0) * s) / 2, versatzY = 93 - (y1 - y0) * s
+  const p = {} as FigurPose
+  for (const a of Object.keys(roh) as Anker[]) p[a] = [begrenze(versatzX + (roh[a][0] - x0) * s), begrenze(versatzY + (roh[a][1] - y0) * s)]
+  return p
+}
+
 export function istFigurPose(v: unknown): v is FigurPose {
   if (!v || typeof v !== 'object') return false
   return ANKER.every(({ id }) => {

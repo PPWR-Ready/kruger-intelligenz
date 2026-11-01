@@ -225,8 +225,8 @@ export function TeamUebungEditor() {
               </label>
               <label className="feld" style={{ flex: 1 }}><span>Kamera steht</span>
                 <select value={r.ansicht} onChange={(e) => aendere({ ansicht: e.target.value as Regeln['ansicht'] })}>
-                  <option value="seitlich">seitlich</option>
-                  <option value="frontal">frontal</option>
+                  <option value="seitlich">seitlich oder schräg (empfohlen)</option>
+                  <option value="frontal">von vorn</option>
                 </select>
               </label>
             </div>

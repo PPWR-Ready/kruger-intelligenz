@@ -4,6 +4,7 @@ import type { PoseLandmarker } from '@mediapipe/tasks-vision'
 import { erkenne, erkennungLaden, kameraStarten, kameraStoppen, lichtMoeglich, lichtSchalten, type Kamera } from '../lib/pose/erkennung'
 import { GELENK, Glaetter, besteSeite, gelenkPunkte, gelenkScheitel, gelenkwinkel, type GelenkId, type Punkt, type Seite } from '../lib/pose/geometrie'
 import { Icon } from './Icon'
+import { ausrichtung as berechneAusrichtung, type Ausrichtung } from '../lib/pose/ausrichtung'
 
 /** Verbindungen des Skeletts ohne Gesicht (Punkte 0–10). */
 const KNOCHEN: [number, number][] = [
@@ -26,11 +27,13 @@ interface Props {
   beimBild: (b: Bild) => void
   /** Bild anhalten (z. B. nach Satzende), Kamera läuft weiter. */
   pausiert?: boolean
+  /** Hinweis zum Ausrichten (abgeschnitten, zu klein …); kommt auch, wenn pausiert. */
+  beiAusrichtung?: (a: Ausrichtung | null) => void
 }
 
 type Status = { art: 'laedt' } | { art: 'laeuft' } | { art: 'fehler'; text: string }
 
-export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false }: Props) {
+export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false, beiAusrichtung }: Props) {
   const video = useRef<HTMLVideoElement>(null)
   const leinwand = useRef<HTMLCanvasElement>(null)
   const [richtung, setRichtung] = useState<Kamera>('environment')
@@ -41,8 +44,8 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
   const [licht, setLicht] = useState(false)
 
   // Aktuelle Props für die Schleife, ohne sie bei jeder Änderung neu zu starten
-  const aktuell = useRef({ gelenke, fehler, beimBild, pausiert })
-  useLayoutEffect(() => { aktuell.current = { gelenke, fehler, beimBild, pausiert } })
+  const aktuell = useRef({ gelenke, fehler, beimBild, pausiert, beiAusrichtung })
+  useLayoutEffect(() => { aktuell.current = { gelenke, fehler, beimBild, pausiert, beiAusrichtung } })
 
   useEffect(() => {
     let aus = false
@@ -52,6 +55,9 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
     let seite: Seite | undefined
     let seiteGeprueft = 0
     let letzteVideozeit = -1
+    // Ausrichtung erst melden, wenn sie einen Moment gleich bleibt (kein Flackern)
+    let ausrichtungKandidat: string | null = null, ausrichtungSeit = 0, ausrichtungGemeldet: string | null = 'start'
+    let ausrichtungJetzt: Ausrichtung | null = null
     const hinweis = window.setTimeout(() => setLangsam(true), 6000)
 
     async function start() {
@@ -81,7 +87,18 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
       // Das Bild wird auf die 3:4-Fläche zugeschnitten (object-fit: cover). Punkte außerhalb
       // des sichtbaren Ausschnitts gelten als nicht sichtbar – sonst würde die App mit
       // Körperteilen rechnen, die man selbst nicht sieht, und nie „Bitte ganz ins Bild“ sagen.
-      const lm = imAusschnitt(erkenne(erkennung, v, jetzt), B, H, c.clientWidth, c.clientHeight)
+      const erkannt = erkenne(erkennung, v, jetzt)
+      const lm = imAusschnitt(erkannt.punkte, B, H, c.clientWidth, c.clientHeight)
+      // Ausrichtung: abgeschnitten, zu klein, zu groß? (bezogen auf den sichtbaren Ausschnitt)
+      const [rx, ry] = randAnteile(B, H, c.clientWidth, c.clientHeight)
+      const a = erkannt.punkte.length ? berechneAusrichtung(erkannt.punkte, rx, ry) : null
+      const code = a?.code ?? null
+      if (code !== ausrichtungKandidat) { ausrichtungKandidat = code; ausrichtungSeit = jetzt }
+      if (code !== ausrichtungGemeldet && jetzt - ausrichtungSeit > 700) {
+        ausrichtungGemeldet = code
+        ausrichtungJetzt = a
+        aktuell.current.beiAusrichtung?.(a)
+      }
       if (c.width !== B || c.height !== H) { c.width = B; c.height = H }
 
       if (lm.length && (!seite || jetzt - seiteGeprueft > 1000)) {
@@ -91,8 +108,10 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
         seiteGeprueft = jetzt
       }
       const s = seite ?? 'links'
-      const w = glaetter.glaette(gelenkwinkel(lm, s, B, H))
+      // 3D-Weltpunkte: Winkel stimmen aus jeder Richtung (seitlich, schräg, frontal)
+      const w = glaetter.glaette(gelenkwinkel(lm, s, B, H, erkannt.welt))
       zeichne(c, lm, w, s, richtung === 'user', aktuell.current.gelenke, aktuell.current.fehler)
+      if (ausrichtungJetzt) zeichnePfeil(c, ausrichtungJetzt, richtung === 'user', jetzt)
       if (!aktuell.current.pausiert) aktuell.current.beimBild({ winkel: w, seite: s, zeit: jetzt, person: lm.length > 0 })
     }
 
@@ -143,6 +162,42 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false 
       </button>
     </div>
   )
+}
+
+/** Anteil des Kamerabilds, der links/rechts bzw. oben/unten durch den Zuschnitt verdeckt ist. */
+function randAnteile(B: number, H: number, fb: number, fh: number): [number, number] {
+  if (!B || !H || !fb || !fh) return [0, 0]
+  const massstab = Math.max(fb / B, fh / H)
+  return [Math.max(0, (1 - fb / massstab / B) / 2), Math.max(0, (1 - fh / massstab / H) / 2)]
+}
+
+/** Großer, pulsierender Pfeil: dorthin soll der Körper im Bild. */
+function zeichnePfeil(c: HTMLCanvasElement, a: Ausrichtung, spiegel: boolean, t: number) {
+  const ctx = c.getContext('2d')
+  if (!ctx) return
+  const { width: B, height: H } = c
+  const s = Math.max(B, H) / 640
+  const dx = spiegel ? -a.pfeil.dx : a.pfeil.dx, dy = a.pfeil.dy
+  const puls = 0.65 + 0.35 * Math.sin(t / 180)
+  ctx.save()
+  ctx.globalAlpha = puls
+  ctx.fillStyle = '#f2a41c'
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+  ctx.lineWidth = 3 * s
+  const zeichne = (x: number, y: number, winkel: number) => {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(winkel)
+    ctx.beginPath(); ctx.moveTo(34 * s, 0); ctx.lineTo(-18 * s, -32 * s); ctx.lineTo(-6 * s, 0); ctx.lineTo(-18 * s, 32 * s); ctx.closePath()
+    ctx.fill(); ctx.stroke(); ctx.restore()
+  }
+  if (dx || dy) {
+    // Pfeil am Rand, von dem weg der Körper soll, zeigt in die Bildmitte
+    zeichne(B / 2 - dx * B * 0.34, H / 2 - dy * H * 0.36, Math.atan2(dy, dx))
+  } else if (a.code === 'naeher' || a.code === 'weiter_weg') {
+    // zwei Pfeile: nach innen (näher) bzw. nach außen (weiter weg)
+    const aussen = a.code === 'naeher' ? Math.PI : 0 // näher: Pfeile nach außen, weiter weg: nach innen
+    zeichne(B * 0.18, H / 2, aussen); zeichne(B * 0.82, H / 2, Math.PI - aussen)
+  }
+  ctx.restore()
 }
 
 /** Setzt die Sichtbarkeit von Punkten außerhalb des zugeschnittenen Ausschnitts auf 0. */

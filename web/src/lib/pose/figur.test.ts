@@ -1,4 +1,4 @@
-import { STEHEN, alsKoerperpunkte, ausKoerperpunkten, bildBezug, figurWinkel, setzeWinkel, zieheAnker } from './figur'
+import { STEHEN, alsKoerperpunkte, ausKoerperpunkten, ausWeltpunkten, bildBezug, figurWinkel, seitlichkeit, setzeWinkel, zieheAnker } from './figur'
 import { gelenkwinkel } from './geometrie'
 
 const laenge = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1])
@@ -65,5 +65,36 @@ describe('Rumpfneigung nach vorn', () => {
   it('auch nachdem das Knie gebeugt wurde', () => {
     const p = setzeWinkel(setzeWinkel(STEHEN, 'knie', 90), 'rumpfneigung', 30)
     expect(p.schulter[0]).toBeGreaterThan(p.huefte[0])
+  })
+})
+
+describe('3D: jede Blickrichtung', () => {
+  // Hocke als 3D-Weltpunkte (Meter, y nach unten), beide Körperseiten 15 cm auseinander
+  function welt(drehGrad: number) {
+    const pose = zieheAnker(zieheAnker(STEHEN, 'huefte', [44, 66]), 'hand', [66, 46])
+    const lm = alsKoerperpunkte(pose)
+    const a = (drehGrad * Math.PI) / 180
+    const w = lm.map((q) => ({ ...q }))
+    // rechte Seite = linke Seite, quer versetzt (Körperachse z)
+    for (const [l, r] of [[7, 8], [11, 12], [13, 14], [15, 16], [23, 24], [25, 26], [27, 28], [31, 32]]) {
+      w[l] = { x: lm[l].x, y: lm[l].y, z: -0.08, visibility: 1 }
+      w[r] = { x: lm[l].x, y: lm[l].y, z: 0.08, visibility: 1 }
+    }
+    // um die senkrechte Achse drehen (Kamera schaut aus einer anderen Richtung)
+    return { pose, welt: w.map((q) => ({ ...q, x: (q.x - 0.5) * Math.cos(a) + (q.z ?? 0) * Math.sin(a), z: -(q.x - 0.5) * Math.sin(a) + (q.z ?? 0) * Math.cos(a) })) }
+  }
+  it.each([0, 45, 90, 135])('gleiche Winkel bei %i° Drehung', (grad) => {
+    const { pose, welt: w } = welt(grad)
+    const soll = figurWinkel(pose)
+    const ist3d = gelenkwinkel(w, 'links', 1, 1, w)
+    const seitenansicht = figurWinkel(ausWeltpunkten(w, 'links')!)
+    for (const g of ['knie', 'huefte', 'ellbogen'] as const) {
+      expect(ist3d[g]).toBeCloseTo(soll[g] as number, 0)
+      expect(seitenansicht[g]).toBeCloseTo(soll[g] as number, 0)
+    }
+  })
+  it('erkennt, wie seitlich die Kamera steht', () => {
+    expect(seitlichkeit(welt(0).welt)).toBeGreaterThan(0.9)
+    expect(seitlichkeit(welt(90).welt)).toBeLessThan(0.1)
   })
 })

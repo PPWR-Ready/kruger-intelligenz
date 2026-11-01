@@ -68,25 +68,28 @@ function verkleinert(el: HTMLImageElement | HTMLVideoElement): HTMLCanvasElement
  * Anteile (0–1) und passen damit auch zum Originalbild. Fällt die Grafik-Berechnung
  * aus, wird automatisch auf den Prozessor gewechselt.
  */
-export async function erkenneBild(el: HTMLImageElement | HTMLVideoElement): Promise<Punkt[]> {
+export async function erkenneBild(el: HTMLImageElement | HTMLVideoElement): Promise<Erkannt> {
   const leinwand = verkleinert(el)
   bildLaden ??= bildErkennungLaden(true).catch(() => bildErkennungLaden(false))
   let { lm, gpu } = await bildLaden.catch((e) => { bildLaden = null; throw e })
+  const als = (r: ReturnType<PoseLandmarker['detect']>): Erkannt => ({ punkte: (r.landmarks[0] ?? []) as Punkt[], welt: (r.worldLandmarks?.[0] ?? null) as Punkt[] | null })
   try {
-    return (lm.detect(leinwand).landmarks[0] ?? []) as Punkt[]
+    return als(lm.detect(leinwand))
   } catch (e) {
     if (!gpu) throw e
     bildLaden = bildErkennungLaden(false)
     ;({ lm, gpu } = await bildLaden)
-    return (lm.detect(leinwand).landmarks[0] ?? []) as Punkt[]
+    return als(lm.detect(leinwand))
   }
 }
 
-/** Körperpunkte für das aktuelle Videobild, oder leer, wenn niemand erkannt wurde. */
-export function erkenne(lm: PoseLandmarker, video: HTMLVideoElement, zeit: number): Punkt[] {
+/** Körperpunkte für das aktuelle Videobild (Bild-Anteile) und als 3D-Weltpunkte, oder leer. */
+export function erkenne(lm: PoseLandmarker, video: HTMLVideoElement, zeit: number): Erkannt {
   const r = lm.detectForVideo(video, zeit)
-  return (r.landmarks[0] ?? []) as Punkt[]
+  return { punkte: (r.landmarks[0] ?? []) as Punkt[], welt: (r.worldLandmarks?.[0] ?? null) as Punkt[] | null }
 }
+
+export interface Erkannt { punkte: Punkt[]; welt: Punkt[] | null }
 
 export type Kamera = 'user' | 'environment'
 
