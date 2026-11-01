@@ -5,8 +5,8 @@ import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as RPoin
 import { FigurDefs, MUSKELN, Mensch } from '../../components/UebungsBild'
 import { Icon } from '../../components/Icon'
 import { ANKER, STEHEN, VORLAGEN, ausKoerperpunkten, bildBezug, figurWinkel, setzeWinkel, zieheAnker, type Anker, type FigurPose, type XY } from '../../lib/pose/figur'
-import { GELENK, GELENKE, besteSeite, gelenkwinkel, type GelenkId, type Punkt } from '../../lib/pose/geometrie'
-import { erkennungLaden } from '../../lib/pose/erkennung'
+import { GELENK, GELENKE, besteSeite, gelenkwinkel, type GelenkId } from '../../lib/pose/geometrie'
+import { erkenneBild } from '../../lib/pose/erkennung'
 import type { Pruefung, Regeln } from '../../lib/pose/regeln'
 
 type Phase = 'start' | 'ende'
@@ -166,12 +166,8 @@ function Marionette({ pose, geist, muskelGelenk, aendern }: { pose: FigurPose; g
 // Foto / Video vermessen
 // ---------------------------------------------------------------------------
 
-let zeitstempel = 0
 async function vermesse(el: HTMLVideoElement | HTMLImageElement, breite: number, hoehe: number) {
-  const lm = await erkennungLaden()
-  zeitstempel += 50
-  const r = lm.detectForVideo(el as HTMLVideoElement, zeitstempel)
-  const punkte = (r.landmarks[0] ?? []) as Punkt[]
+  const punkte = await erkenneBild(el)
   if (!punkte.length) return null
   const seite = besteSeite(punkte)
   return { punkte, seite, pose: ausKoerperpunkten(punkte, seite, breite, hoehe), winkel: gelenkwinkel(punkte, seite, breite, hoehe) }
@@ -217,8 +213,9 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
       setMessung(m)
       setStatus(!m ? 'Keine Person erkannt. Am besten seitlich, ganzer Körper im Bild, gutes Licht.' : !m.pose ? 'Nicht alle Körperpunkte sind sichtbar – bitte ganzer Körper im Bild.' : null)
       zeichne(m)
-    } catch {
-      setStatus('Die Vermessung hat nicht geklappt. Bitte neu laden und noch einmal versuchen.')
+    } catch (e) {
+      console.error('Vermessung fehlgeschlagen', e)
+      setStatus(`Die Vermessung hat nicht geklappt. Bitte die Seite neu laden und noch einmal versuchen. (${e instanceof Error ? e.message : String(e)})`)
     }
   }
 
@@ -319,9 +316,11 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
         <>
           <div className="medien-buehne">
             {datei.art === 'bild'
-              ? <img ref={bild} src={datei.url} alt="Hochgeladene Übung" onLoad={() => void messen()} />
+              ? <img ref={bild} src={datei.url} alt="Hochgeladene Übung" onLoad={() => void messen()}
+                  onError={() => setStatus('Dieses Bildformat kann der Browser nicht öffnen (z. B. HEIC vom iPhone). Bitte das Foto als JPG wählen oder einen Screenshot davon nehmen.')} />
               : <video ref={video} src={datei.url} muted playsInline preload="auto"
-                  onLoadedData={() => { setDauer(video.current?.duration ?? 0); void messen() }} onSeeked={() => void messen()} />}
+                  onLoadedData={() => { setDauer(video.current?.duration ?? 0); void messen() }} onSeeked={() => void messen()}
+                  onError={() => setStatus('Dieses Videoformat kann der Browser nicht abspielen. Bitte als MP4 aufnehmen oder exportieren.')} />}
             <canvas ref={leinwand} aria-hidden="true" />
           </div>
           {datei.art === 'video' && dauer > 0 && (
