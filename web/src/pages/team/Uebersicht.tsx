@@ -57,7 +57,7 @@ export function TeamUebersicht() {
 
           <section className="stapel">
             <h2 className="untertitel">Mitglieder-Ampel</h2>
-            <p className="klein leise" style={{ margin: 0 }}>Nur Mitglieder, die dem Team ihren Fortschritt freigegeben haben. Chats sind nie sichtbar.</p>
+            <p className="klein leise" style={{ margin: 0 }}>Nur Mitglieder, die dem Team ihren Fortschritt freigegeben haben. Chats sieht das Team nicht – nur Rückfragen, die der Assistent nicht beantworten konnte.</p>
             {zeilen.length === 0 ? (
               <div className="leer">Noch keine Mitglieder mit Freigabe. Sobald Mitglieder „Trainer darf Fortschritt sehen“ einschalten, erscheinen sie hier.</div>
             ) : (

@@ -107,10 +107,17 @@ Deno.serve(async (req) => {
             })),
           ),
         )
-        await admin
+        // Nur übernehmen, wenn die Version inzwischen nicht überholt wurde (sonst wieder raus aus dem Index)
+        const { data: gesetzt } = await admin
           .from('wissen_versionen')
           .update({ index_status: 'indexiert', indexiert_am: new Date().toISOString(), index_fehler: null })
           .eq('id', e.version.id)
+          .in('index_status', status)
+          .select('id')
+        if (!gesetzt?.length) {
+          await versionEntfernen(e.version.id)
+          continue
+        }
         bericht.indexiert++
         bericht.abschnitte += abschnitte.length
       } catch (err) {
@@ -119,6 +126,7 @@ Deno.serve(async (req) => {
           .from('wissen_versionen')
           .update({ index_status: 'fehler', index_fehler: String(err instanceof Error ? err.message : err).slice(0, 500) })
           .eq('id', e.version.id)
+          .in('index_status', status)
         bericht.fehler++
       }
     }

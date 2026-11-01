@@ -236,3 +236,16 @@ describe('Auswertung mit Halten in der Endposition', () => {
     expect(leseRegeln({ ...mitHalten, endhalten_sekunden: 500 }).regeln).toBeNull()
   })
 })
+
+describe('Regeln nach dem Audit', () => {
+  it('Halten ohne überwachtes Gelenk ist unvollständig (sonst zählt Stehen)', () => {
+    const { regeln, fehler } = leseRegeln({ version: 1, ansicht: 'seitlich', modus: 'halten', halten_sekunden: 30, pruefungen: [] })
+    expect(regeln).toBeNull()
+    expect(fehler.join(' ')).toMatch(/mindestens ein überwachtes Gelenk/)
+  })
+  it('von Hand gesetzte Grenzen bleiben markiert', () => {
+    const { regeln } = leseRegeln({ version: 1, ansicht: 'seitlich', modus: 'halten', halten_sekunden: 30,
+      pruefungen: [{ id: 'auto-knie', gelenk: 'knie', min: 90, max: 120, wann: 'immer', meldung: 'Knie', fest: true }] })
+    expect(regeln?.pruefungen[0].fest).toBe(true)
+  })
+})

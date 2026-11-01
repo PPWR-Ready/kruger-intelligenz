@@ -42,7 +42,11 @@ export function SitzungProvider({ children }: { children: ReactNode }) {
   const [hatEinwilligungen, setHatEinwilligungen] = useState(false)
   const geladenFuer = useRef<string | null | undefined>(undefined)
 
+  const ladeNr = useRef(0)
   const ladeDaten = useCallback(async (s: Session | null) => {
+    // Nur das Ergebnis des neuesten Ladevorgangs zählt (getSession und SIGNED_IN laufen oft gleichzeitig)
+    const nr = ++ladeNr.current
+    const aktuell = () => nr === ladeNr.current
     if (!s) {
       setProfil(null)
       setEinwilligungen({})
@@ -59,13 +63,19 @@ export function SitzungProvider({ children }: { children: ReactNode }) {
         if (!error && data) {
           p = data as Profil
           vergissCode()
+        } else {
+          // Parallel schon eingelöst? Dann das Profil einfach neu lesen.
+          ({ data: p } = await supabase.from('profiles').select('*').eq('id', s.user.id).maybeSingle<Profil>())
+          if (p) vergissCode()
         }
       }
     }
+    if (!aktuell()) return
     setProfil(p ?? null)
 
     if (p) {
       const { data: e } = await supabase.from('einwilligungen').select('*').eq('user_id', p.id).returns<Einwilligung[]>()
+      if (!aktuell()) return
       const map: Partial<Record<EinwilligungArt, boolean>> = {}
       for (const x of e ?? []) map[x.art] = x.erteilt
       setEinwilligungen(map)
@@ -112,6 +122,8 @@ export function SitzungProvider({ children }: { children: ReactNode }) {
       neuLaden: () => ladeDaten(session),
       abmelden: async () => {
         await supabase.auth.signOut()
+        // Alles im Speicher (z. B. laufender Chat) verwerfen, damit die nächste Person nichts davon sieht
+        location.replace('/')
       },
     }),
     [laedt, session, profil, einwilligungen, hatEinwilligungen, ladeDaten],

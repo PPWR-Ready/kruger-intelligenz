@@ -8,6 +8,7 @@ import type { Freigabe, Sichtbarkeit } from '../../lib/db'
 import { Fehler, Laden, useMitteilung } from '../../components/Bausteine'
 import { Antworttext } from '../../components/Antworttext'
 import { useTeam } from './Layout'
+import { leseRegeln } from '../../lib/pose/regeln'
 
 type Zeile = Freigabe & {
   einreicher: { anzeigename: string } | null
@@ -96,6 +97,8 @@ function FreigabeKarte({ f, fertig }: { f: Zeile; fertig: (t: string) => void })
   const [vergleich, setVergleich] = useState(false)
   const [fehler, setFehler] = useState<string | null>(null)
   const [laeuft, setLaeuft] = useState(false)
+  // Übungen nur mit vollständigen Kamera-Regeln freigeben (sonst fehlt Mitgliedern die Kamera)
+  const regelFehler = f.uebung ? leseRegeln(f.uebung.regeln).fehler : []
 
   const e = f.version?.eintrag
   const istAenderung = !!e?.aktuelle_version_id && e.aktuelle_version_id !== f.version?.id
@@ -152,6 +155,12 @@ function FreigabeKarte({ f, fertig }: { f: Zeile; fertig: (t: string) => void })
           <h2 className="untertitel">{f.uebung.name}</h2>
           {f.uebung.beschreibung && <p className="klein" style={{ margin: 0 }}>{f.uebung.beschreibung}</p>}
           <Link to={`/team/uebungen/${f.uebung.id}`} className="knopf klein" style={{ alignSelf: 'flex-start' }}>Regeln ansehen und mit Kamera testen</Link>
+          {regelFehler.length > 0 && (
+            <div className="karte" style={{ background: 'var(--bg)', gap: 4 }} role="note">
+              <strong className="klein">Kamera-Regeln unvollständig – so kann die Übung nicht freigegeben werden:</strong>
+              <ul className="klein" style={{ margin: 0, paddingLeft: 18 }}>{regelFehler.map((t) => <li key={t}>{t}</li>)}</ul>
+            </div>
+          )}
         </>
       ) : <span className="leise">Inhalt nicht mehr vorhanden.</span>}
 
@@ -160,7 +169,7 @@ function FreigabeKarte({ f, fertig }: { f: Zeile; fertig: (t: string) => void })
           <label className="feld"><span>Anmerkung <span className="leise">(bei Ablehnung Pflicht)</span></span><textarea rows={2} value={anmerkung} onChange={(ev) => setAnmerkung(ev.target.value)} maxLength={1000} /></label>
           <Fehler text={fehler} />
           <div className="reihe" style={{ flexWrap: 'wrap' }}>
-            <button className="knopf primaer" onClick={() => void entscheiden('freigegeben')} disabled={laeuft}>Freigeben</button>
+            <button className="knopf primaer" onClick={() => void entscheiden('freigegeben')} disabled={laeuft || regelFehler.length > 0}>Freigeben</button>
             <button className="knopf still" onClick={() => void entscheiden('abgelehnt')} disabled={laeuft}>Ablehnen</button>
           </div>
         </>

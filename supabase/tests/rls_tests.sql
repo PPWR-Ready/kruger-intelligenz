@@ -234,4 +234,28 @@ update abos set laeuft_bis = now() + interval '10 years' where user_id = auth.ui
 select pruefe((select laeuft_bis < now() + interval '30 days' from abos where user_id = auth.uid()),
               'Abo-Laufzeit unverändert');
 
+-- 9. Rechte-Härtung (Audit 01.11.2026) --------------------------------------
+reset role;
+select als('44444444-4444-4444-4444-444444444444');
+insert into uebungen (id, studio_id, name, an_geraet, status, regeln, erstellt_von) values
+  ('99999999-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000a1', 'Seitneigung', true, 'freigegeben',
+   '{"modus":"halten"}', '33333333-3333-3333-3333-333333333333');
+set role authenticated;
+select als('33333333-3333-3333-3333-333333333333');
+select pruefe((select count(*) from einladungscodes where rolle <> 'mitglied') = 0, 'Trainer sieht keine Team-/Admin-Codes');
+update einladungscodes set max_nutzungen = 50, genutzt = 0 where code = 'RG-TEAM1';
+select muss_scheitern($$update profiles set freigeschaltet = false where id = '44444444-4444-4444-4444-444444444444'$$, 'Trainer sperrt keinen Admin');
+update profiles set external_member_id = 'M-1' where id = '11111111-1111-1111-1111-111111111111';
+select pruefe((select external_member_id = 'M-1' from profiles where id = '11111111-1111-1111-1111-111111111111'), 'Trainer pflegt Mitglieder weiter');
+update uebungen set regeln = '{"modus":"wiederholungen"}' where id = '99999999-0000-0000-0000-000000000002';
+select pruefe((select status = 'eingereicht' from uebungen where id = '99999999-0000-0000-0000-000000000002'),
+              'Trainer-Änderung an freigegebener Übung geht erneut zur Freigabe');
+select als('55555555-5555-5555-5555-555555555555');
+select muss_scheitern($$insert into freigaben (studio_id, typ, uebung_id, eingereicht_von, status)
+  values ('00000000-0000-0000-0000-0000000000b2', 'uebung', '99999999-0000-0000-0000-000000000002', '55555555-5555-5555-5555-555555555555', 'offen')$$,
+  'Freigabe für Übung eines fremden Studios');
+reset role;
+select pruefe((select max_nutzungen = 1 from einladungscodes where code = 'RG-TEAM1'), 'Team-Code blieb unverändert');
+set role authenticated;
+
 \echo 'ALLE TESTS BESTANDEN'

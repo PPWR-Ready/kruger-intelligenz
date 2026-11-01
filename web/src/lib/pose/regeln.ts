@@ -19,6 +19,8 @@ export interface Pruefung {
   wann: Phase
   /** Kurze Fehlermeldung, wird angezeigt und vorgelesen. */
   meldung: string
+  /** Grenzen von Hand eingestellt: nicht mehr automatisch aus der Figur nachführen. */
+  fest?: boolean
 }
 
 export interface Regeln {
@@ -131,8 +133,11 @@ export function leseRegeln(roh: unknown): { regeln: Regeln | null; fehler: strin
     if (!meldung) { fehler.push(`Prüfung ${i + 1}: Die Fehlermeldung fehlt.`); return }
     const wann = (['immer', 'start', 'bewegung', 'umkehr'] as Phase[]).includes(q.wann as Phase) ? (q.wann as Phase) : 'immer'
     if (modus === 'halten' && wann !== 'immer') { fehler.push(`Prüfung ${i + 1}: Beim Halten gibt es nur „die ganze Zeit“.`); return }
-    pruefungen.push({ id: typeof q.id === 'string' && q.id ? q.id : `p${i + 1}`, gelenk: q.gelenk, min, max, wann, meldung: meldung.slice(0, 120) })
+    pruefungen.push({ id: typeof q.id === 'string' && q.id ? q.id : `p${i + 1}`, gelenk: q.gelenk, min, max, wann, meldung: meldung.slice(0, 120), ...(q.fest === true ? { fest: true } : {}) })
   })
+  if (modus === 'halten' && liste.length === 0) {
+    fehler.push('Beim Halten braucht es mindestens ein überwachtes Gelenk – sonst zählt auch einfaches Stehen als gehalten.')
+  }
 
   if (fehler.length) return { regeln: null, fehler }
   return {

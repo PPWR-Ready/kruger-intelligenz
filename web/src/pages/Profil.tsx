@@ -14,7 +14,7 @@ const KONTAKT = (import.meta.env.VITE_KONTAKT_EMAIL as string | undefined) ?? ''
 const EINWILLIGUNGEN: { art: EinwilligungArt; titel: string; text: string }[] = [
   { art: 'gesundheitsdaten', titel: 'Gesundheitsangaben nutzen', text: 'Ziele, Beschwerden und Befinden, damit Antworten und Pläne zu dir passen.' },
   { art: 'kamera', titel: 'Kamera für den Trainer-Modus', text: 'Das Bild bleibt auf deinem Gerät. Gespeichert werden nur Wiederholungen, Bewertung und Korrekturhinweise.' },
-  { art: 'trainer_freigabe', titel: 'Trainer darf Fortschritt sehen', text: 'So kann dich das Team gezielt betreuen. Deine Chats sieht niemand.' },
+  { art: 'trainer_freigabe', titel: 'Trainer darf Fortschritt sehen', text: 'So kann dich das Team gezielt betreuen. Deine Chats liest das Team nicht – nur Fragen, die der Assistent nicht beantworten kann, gehen an das Team, damit es dir antwortet.' },
 ]
 
 export function Profil() {
@@ -40,9 +40,10 @@ export function Profil() {
 
   async function einwilligungAendern(art: EinwilligungArt, an: boolean) {
     if (!s.profil) return
+    if (art === 'gesundheitsdaten' && !an && !confirm('Deine gespeicherten Ziele und Beschwerden werden dabei gelöscht. Fortfahren?')) return
     setFehler(null)
-    const werte = { gesundheitsdaten: !!s.einwilligungen.gesundheitsdaten, kamera: !!s.einwilligungen.kamera, trainer_freigabe: !!s.einwilligungen.trainer_freigabe, [art]: an }
-    const { error } = await speichereEinwilligungen(s.profil.id, werte)
+    // Nur die geänderte Einwilligung speichern – sonst könnte ein schneller zweiter Klick einen Widerruf überschreiben
+    const { error } = await speichereEinwilligungen(s.profil.id, { [art]: an })
     if (error) return setFehler(fehlertext(error))
     // Widerruf: gespeicherte Gesundheitsangaben sofort löschen
     if (art === 'gesundheitsdaten' && !an) await supabase.from('gesundheitsprofil').delete().eq('user_id', s.profil.id)
@@ -134,13 +135,13 @@ export function Profil() {
 
       <section className="stapel">
         <h2 className="untertitel" style={{ fontSize: 17 }}>Meine Daten</h2>
-        <button className="knopf voll" onClick={() => void datenExportieren()}><Icon name="herunterladen" groesse={20} />Alle Daten herunterladen</button>
+        <button className="knopf voll" onClick={() => void datenExportieren()}><Icon name="herunterladen" groesse={20} />Alle Daten herunterladen (Datei für Fachleute)</button>
         {loeschLink
           ? <a className="knopf still voll" href={loeschLink}>Konto löschen lassen</a>
           : <p className="klein leise" style={{ margin: 0 }}>Konto löschen: Sprich das Team im Studio an.</p>}
       </section>
 
-      <button className="knopf kritisch voll" onClick={() => void s.abmelden()}><Icon name="abmelden" groesse={20} />Abmelden</button>
+      <button className="knopf kritisch voll" onClick={() => { if (confirm('Wirklich abmelden?')) void s.abmelden() }}><Icon name="abmelden" groesse={20} />Abmelden</button>
       <Rechtliches />
       {mitteilung}
     </div>

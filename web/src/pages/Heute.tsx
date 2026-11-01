@@ -46,12 +46,12 @@ export function Heute() {
 
   return (
     <div className="seite">
-      <div className="reihe zwischen">
-        <div className="stapel" style={{ gap: 4 }}>
+      <div className="reihe zwischen" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+        <div className="stapel" style={{ gap: 4, minWidth: 0 }}>
           <p className="klein leise" style={{ margin: 0, textTransform: 'capitalize' }}>{wochentag()}</p>
           <h1 className="titel">{tageszeitGruss()}, {vorname(s.profil)}.</h1>
         </div>
-        <Link to="/profil" className="knopf rund" aria-label="Profil" style={{ background: 'var(--surface)', fontWeight: 600 }}>{vorname(s.profil).slice(0, 1)}</Link>
+        <Link to="/profil" className="knopf rund" aria-label="Profil" style={{ background: 'var(--surface)', fontWeight: 600, flexShrink: 0 }}>{vorname(s.profil).slice(0, 1)}</Link>
       </div>
 
       {!s.profil?.freigeschaltet && (
@@ -78,9 +78,9 @@ export function Heute() {
 
       <div className="raster-3">
         <Kachel zahl={dieseWoche} label="Einheiten diese Woche" zu="/fortschritt" />
-        <Kachel zahl={aktuell === null ? '–' : aktuell.toFixed(1).replace('.', ',')} label="Rücken­schmerz Ø 14 Tage" zu="/fortschritt"
+        <Kachel zahl={aktuell === null ? '–' : aktuell.toFixed(1).replace('.', ',')} label="Rücken­schmerz Ø letzte 14 Tage" zu="/fortschritt"
           farbe={aktuell === null ? undefined : aktuell <= 3 ? 'var(--success)' : aktuell <= 6 ? 'var(--warning)' : 'var(--critical)'} />
-        <Kachel zahl={trend === null ? '–' : `${trend > 0 ? '+' : ''}${trend.toFixed(1).replace('.', ',')}`} label={trend === null ? 'Trend, sobald genug Einträge da sind' : trend <= 0 ? 'Schmerz gesunken' : 'Schmerz gestiegen'}
+        <Kachel zahl={trend === null ? '–' : `${trend > 0 ? '+' : trend < 0 ? '−' : ''}${Math.abs(trend).toFixed(1).replace('.', ',')}`} label={trend === null ? 'Trend, sobald genug Einträge da sind' : trend <= 0 ? 'Schmerz gesunken' : 'Schmerz gestiegen'}
           farbe={trend === null ? undefined : trend <= 0 ? 'var(--success)' : 'var(--critical)'} zu="/fortschritt" />
       </div>
 

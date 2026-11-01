@@ -88,16 +88,35 @@ const VORN: Modell = {
 }
 const MODELL: Record<Ansicht, Modell> = { seitlich: SEITE, frontal: VORN }
 
+/** Ohne gespeicherte Figur: Figur aus der Zählregel bauen, damit Regler und Zählregel übereinstimmen. */
+function figurAusZaehlen(m: Modell, z: Regeln['zaehlen']): { start: Pose; ende: Pose } {
+  if (!z || GELENK[z.gelenk].ebene !== m.ansicht) return { start: m.standard, ende: m.standard }
+  return { start: m.setze(m.standard, z.gelenk, z.start), ende: m.setze(m.standard, z.gelenk, z.umkehr) }
+}
+
+/** Zählregel aus der erfassten Figur der aktuellen Ansicht (Hauptbewegung), oder null. */
+export function zaehlenAusFigur(r: Regeln): Regeln['zaehlen'] {
+  const m = MODELL[r.ansicht]
+  const f = (r.ansicht === 'frontal' ? r.figur_vorn : r.figur) as { start: Pose; ende: Pose } | null | undefined
+  if (!f) return null
+  const ws = m.winkel(f.start), we = m.winkel(f.ende)
+  const g = hauptGelenk(m, (id) => (ws[id] != null && we[id] != null ? Math.abs((ws[id] as number) - (we[id] as number)) : null))
+  if (!g || ws[g] == null || we[g] == null || Math.abs((ws[g] as number) - (we[g] as number)) < 15) return null
+  return { gelenk: g, start: kl(ws[g] as number), umkehr: kl(we[g] as number) }
+}
+
 export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regeln) => Regeln) => void }) {
   const halten = r.modus === 'halten'
   const m = MODELL[r.ansicht]
   const [phase, setPhase] = useState<Phase>(halten ? 'ende' : 'start')
   const [quelle, setQuelle] = useState<'figur' | 'medien'>('figur')
-  // Zählgelenk von Hand gewählt (gilt nur für diese Ansicht)
-  const [festFuer, setFestFuer] = useState<Ansicht | null>((r.ansicht === 'frontal' ? r.figur_vorn : r.figur) || r.zaehlen ? r.ansicht : null)
-  const zaehlFest = festFuer === r.ansicht
   const gespeichert = (r.ansicht === 'frontal' ? r.figur_vorn : r.figur) as { start: Pose; ende: Pose } | null | undefined
-  const posen = useMemo(() => gespeichert ?? { start: m.standard, ende: m.standard }, [gespeichert, m])
+  // Zählgelenk von Hand gewählt (gilt nur für diese Ansicht). Bei gespeicherter Figur bleibt die Wahl stehen.
+  const [festFuer, setFestFuer] = useState<Ansicht | null>(gespeichert ? r.ansicht : null)
+  const zaehlFest = festFuer === r.ansicht
+  // Die Ansicht wurde bewusst gewählt (Umschalter oder erkanntes Foto): Fotos stellen sie nicht mehr um
+  const [ansichtFest, setAnsichtFest] = useState(!!gespeichert)
+  const posen = useMemo(() => gespeichert ?? figurAusZaehlen(m, r.zaehlen), [gespeichert, m, r.zaehlen])
   const aktivePhase: Phase = halten ? 'ende' : phase
   const gemessen = useMemo(() => ({ start: m.winkel(posen.start), ende: m.winkel(posen.ende) }), [posen, m])
 
@@ -111,17 +130,27 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
         if (!festhalten) g = hauptGelenk(modell, (id) => (ws[id] != null && we[id] != null ? Math.abs((ws[id] as number) - (we[id] as number)) : null)) ?? g
         zaehlen = { gelenk: g, start: kl(ws[g] ?? STANDARD_ZAEHLEN[modell.ansicht].start), umkehr: kl(we[g] ?? STANDARD_ZAEHLEN[modell.ansicht].umkehr) }
       }
-      const pruefungen = x.pruefungen.map((p) => {
-        if (!p.id.startsWith(AUTO)) return p
+      let pruefungen = x.pruefungen.map((p) => {
+        if (!p.id.startsWith(AUTO) || p.fest) return p
         const a = x.modus === 'halten' ? we[p.gelenk] : ws[p.gelenk], b = we[p.gelenk]
         if (a == null || b == null) return p
         return { ...p, min: kl(Math.min(a, b) - TOLERANZ), max: kl(Math.max(a, b) + TOLERANZ) }
       })
+      // Halten ohne Prüfung würde auch bloßes Stehen zählen: die Gelenke überwachen, die sich vom Stehen unterscheiden
+      if (x.modus === 'halten' && pruefungen.length === 0) {
+        const stehen = modell.winkel(modell.standard)
+        pruefungen = modell.zaehlbar
+          .filter((g) => we[g] != null && stehen[g] != null && Math.abs((we[g] as number) - (stehen[g] as number)) >= 20)
+          .sort((a, b) => Math.abs((we[b] as number) - (stehen[b] as number)) - Math.abs((we[a] as number) - (stehen[a] as number)))
+          .slice(0, 3)
+          .map((g) => ({ id: AUTO + g, gelenk: g, min: kl((we[g] as number) - TOLERANZ), max: kl((we[g] as number) + TOLERANZ), wann: 'immer' as const, meldung: MELDUNG[g] }))
+      }
       const feld = modell.ansicht === 'frontal' ? { figur_vorn: neu as unknown as Regeln['figur_vorn'] } : { figur: neu as unknown as Regeln['figur'] }
       return { ...x, ...feld, zaehlen, pruefungen }
     })
   }
-  const poseSetzen = (ph: Phase, p: Pose, festhalten = zaehlFest) => posenSetzen(halten ? { start: p, ende: p } : { ...posen, [ph]: p }, festhalten)
+  // Halten: nur die Halteposition ändern, die Ausgangsposition bleibt (für einen späteren Wechsel auf Wiederholungen)
+  const poseSetzen = (ph: Phase, p: Pose, festhalten = zaehlFest) => posenSetzen(halten ? { ...posen, ende: p } : { ...posen, [ph]: p }, festhalten)
   // Schieberegler: Gelenk in der gerade gewählten Position drehen – Figur und Foto-Skelett folgen
   const winkelSetzen = (g: GelenkId, v: number) => poseSetzen(aktivePhase, m.setze(posen[aktivePhase], g, v), true)
 
@@ -139,11 +168,16 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
     })
   }
   const setzeGrenze = (g: GelenkId, feld: 'min' | 'max', v: number) =>
-    setR((x) => ({ ...x, pruefungen: x.pruefungen.map((p) => (p.id === AUTO + g ? { ...p, [feld]: v } : p)) }))
+    setR((x) => ({ ...x, pruefungen: x.pruefungen.map((p) => (p.id === AUTO + g ? { ...p, [feld]: v, fest: true } : p)) }))
 
   /** Foto zeigt eine andere Ansicht: Übung umstellen und die gemessenen Positionen dort übernehmen. */
   function ansichtSetzen(a: Ansicht) {
-    setR((x) => ansichtWechseln(x, a))
+    setAnsichtFest(true)
+    setR((x) => {
+      const y = ansichtWechseln(x, a)
+      // Zählregel zur schon vorhandenen Figur dieser Ansicht passend machen
+      return y.modus === 'wiederholungen' ? { ...y, zaehlen: zaehlenAusFigur(y) ?? y.zaehlen } : y
+    })
   }
 
   return (
@@ -181,8 +215,8 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
       )}
 
       {quelle === 'medien'
-        ? <MedienVermessung modell={m} festgelegt={!!gespeichert} halten={halten} phase={aktivePhase} posen={posen} ansichtSetzen={ansichtSetzen}
-            uebernehmen={(ph, p) => { poseSetzen(ph, p); if (!halten) setPhase(ph === 'start' ? 'ende' : 'start') }}
+        ? <MedienVermessung modell={m} festgelegt={ansichtFest} halten={halten} phase={aktivePhase} posen={posen} ansichtSetzen={ansichtSetzen}
+            uebernehmen={(ph, p) => { poseSetzen(ph, p); if (!halten && ph === 'start') setPhase('ende') }}
             beide={(s, e) => posenSetzen({ start: s, ende: e })} />
         : <Marionette key={m.ansicht} modell={m} pose={posen[aktivePhase]} geist={halten ? null : posen[aktivePhase === 'start' ? 'ende' : 'start']}
             muskelGelenk={r.zaehlen?.gelenk ?? r.pruefungen[0]?.gelenk ?? STANDARD_ZAEHLEN[r.ansicht].gelenk}
@@ -313,7 +347,14 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
   const leinwand = useRef<HTMLCanvasElement>(null)
   /** Erste Messung einer neuen Datei: Ansicht der Übung ggf. automatisch anpassen. */
   const neueDatei = useRef(false)
+  /** Aufnahmerichtung unklar (schräg): kurz nachfragen bzw. Umstellen anbieten. */
+  const [richtung, setRichtung] = useState<'fragen' | Ansicht | null>(null)
+  /** Video wird automatisch analysiert: Einzelmessungen beim Spulen und Knöpfe ruhen. */
+  const [analyse, setAnalyse] = useState(false)
+  const analyseRef = useRef(false)
   const figur = figurAus(messung, ansicht)
+  // Angezeigt werden die Winkel der Figur, die auch übernommen wird
+  const figurWerte = figur ? modell.winkel(figur.pose) : null
 
   useEffect(() => () => { if (datei) URL.revokeObjectURL(datei.url) }, [datei])
 
@@ -325,6 +366,7 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
     setBezug({})
     setStatus('Datei wird geladen …')
     neueDatei.current = true
+    setRichtung(null)
     setDatei({ url: URL.createObjectURL(f), art: f.type.startsWith('video') ? 'video' : 'bild' })
   }
 
@@ -335,27 +377,30 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
     const el = datei?.art === 'video' ? video.current : bild.current
     if (!el) return
     const [b, h] = masse(el)
-    setStatus('Körper wird vermessen … (beim ersten Mal lädt die Erkennung, ca. 25 MB)')
+    setStatus('Körper wird vermessen … (beim ersten Mal lädt die Erkennung, ca. 12 MB)')
     try {
       const m = await vermesse(el, b, h)
       setMessung(m)
-      let a = ansicht, umgestellt = false, abweichend = false
+      let a = ansicht, umgestellt = false, abweichend = false, fragen = false
       if (m && neueDatei.current && m.anteil !== null) {
         // Aufnahmerichtung erkannt: beim ersten Foto die Übung auf die passende Ansicht stellen
         const erkannt: Ansicht | null = m.anteil < 0.4 ? 'frontal' : m.anteil > 0.6 ? 'seitlich' : null
         if (erkannt && erkannt !== ansicht) {
-          if (festgelegt) abweichend = true
+          if (festgelegt) { abweichend = true; setRichtung(erkannt) }
           else { a = erkannt; umgestellt = true; ansichtSetzen(erkannt) }
+        } else if (!erkannt && !festgelegt) {
+          fragen = true; setRichtung('fragen')
         }
       }
       if (m) neueDatei.current = false
       const f = figurAus(m, a)
       setStatus(!m ? 'Keine Person erkannt. Bitte ganzer Körper im Bild und gutes Licht.'
         : !f ? 'Nicht alle Körperpunkte sind sichtbar – bitte ganzer Körper im Bild.'
+        : fragen ? 'Schräg aufgenommen. Wie bewegt sich die Person bei dieser Übung?'
         : umgestellt ? (a === 'frontal'
           ? 'Von vorn aufgenommen – die Übung ist jetzt auf „Von vorn“ gestellt. Gemessen werden Bewegungen zur Seite (Seitneigung, Arme, Beine, Kopf).'
           : 'Von der Seite aufgenommen – die Übung ist jetzt auf „Von der Seite“ gestellt.')
-        : abweichend ? `Dieses Foto ist eher ${a === 'frontal' ? 'von der Seite' : 'von vorn'} aufgenommen. Gemessen wird trotzdem ${a === 'frontal' ? 'von vorn' : 'von der Seite'} – in 3D. Oben lässt sich die Ansicht umstellen.`
+        : abweichend ? `Dieses Foto ist eher ${a === 'frontal' ? 'von der Seite' : 'von vorn'} aufgenommen. Gemessen wird trotzdem ${a === 'frontal' ? 'von vorn' : 'von der Seite'} – in 3D.`
         : !f.zuBild ? 'Schräg aufgenommen: Die Winkel werden in 3D gemessen.'
         : null)
     } catch (e) {
@@ -426,7 +471,11 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
   /** Video in Schritten vermessen und die zwei Positionen mit der größten Bewegung finden. */
   async function automatisch() {
     const v = video.current
-    if (!v || !dauer) return
+    if (!v || !dauer || analyseRef.current) return
+    analyseRef.current = true; setAnalyse(true)
+    try { await analysieren(v) } finally { analyseRef.current = false; setAnalyse(false) }
+  }
+  async function analysieren(v: HTMLVideoElement) {
     const schritte = 18
     const liste: { t: number; m: Messung; f: Figurmessung }[] = []
     for (let i = 0; i < schritte; i++) {
@@ -439,12 +488,13 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
     }
     if (liste.length < 3) { setStatus('Im Video war die Person zu selten ganz zu sehen.'); return }
     // Gelenk mit der größten Bewegung; Start = erstes Bild, Ende = weitester Punkt davon
+    const wf = (x: { f: Figurmessung }) => modell.winkel(x.f.pose)
     const best = hauptGelenk(modell, (g) => {
-      const w = liste.map((x) => x.m.winkel[g]).filter((x): x is number => x != null)
+      const w = liste.map((x) => wf(x)[g]).filter((x): x is number => x != null)
       return w.length ? Math.max(...w) - Math.min(...w) : null
     }) ?? modell.zaehlbar[0]
     const s = liste[0]
-    const abst = (x: typeof s) => Math.abs((x.m.winkel[best] ?? 0) - (s.m.winkel[best] ?? 0))
+    const abst = (x: typeof s) => Math.abs((wf(x)[best] ?? 0) - (wf(s)[best] ?? 0))
     const e = liste.reduce((a, x) => (abst(x) > abst(a) ? x : a), liste[0])
     beide(s.f.pose, e.f.pose)
     setBezug({
@@ -453,10 +503,10 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
     })
     await springe(v, e.t); setZeit(e.t)
     setMessung(e.m)
-    setStatus(`Gefunden: ${GELENK[best].name} bewegt sich von ${rund(s.m.winkel[best])}° bis ${rund(e.m.winkel[best])}°. Beide Positionen sind übernommen – prüfe sie kurz.`)
+    setStatus(`Gefunden: ${GELENK[best].name} bewegt sich von ${rund(wf(s)[best])}° bis ${rund(wf(e)[best])}°. Beide Positionen sind übernommen – prüfe sie kurz.`)
   }
 
-  const werte = gelenkeFuer(ansicht).filter((g) => messung?.winkel[g.id] != null)
+  const werte = gelenkeFuer(ansicht).filter((g) => figurWerte?.[g.id] != null)
 
   return (
     <div className="stapel" style={{ gap: 10 }}>
@@ -474,7 +524,7 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
               ? <img ref={bild} src={datei.url} alt="Hochgeladene Übung" onLoad={() => void messen()}
                   onError={() => setStatus('Dieses Bildformat kann der Browser nicht öffnen (z. B. HEIC vom iPhone). Bitte das Foto als JPG wählen oder einen Screenshot davon nehmen.')} />
               : <video ref={video} src={datei.url} muted playsInline preload="auto"
-                  onLoadedData={() => { setDauer(video.current?.duration ?? 0); void messen() }} onSeeked={() => void messen()}
+                  onLoadedData={() => { setDauer(video.current?.duration ?? 0); void messen() }} onSeeked={() => { if (!analyseRef.current) void messen() }}
                   onError={() => setStatus('Dieses Videoformat kann der Browser nicht abspielen. Bitte als MP4 aufnehmen oder exportieren.')} />}
             <canvas ref={leinwand} aria-hidden="true" />
           </div>
@@ -484,6 +534,17 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
             </label>
           )}
           {status && <p className="klein" role="status" style={{ margin: 0 }}>{status}</p>}
+          {richtung === 'fragen' && (
+            <div className="reihe" style={{ flexWrap: 'wrap' }}>
+              <button type="button" className="knopf klein" onClick={() => { setRichtung(null); setStatus(null); ansichtSetzen('frontal') }}>Zur Seite (Kamera von vorn)</button>
+              <button type="button" className="knopf klein" onClick={() => { setRichtung(null); setStatus(null); ansichtSetzen('seitlich') }}>Nach vorn/hinten (Kamera seitlich)</button>
+            </div>
+          )}
+          {(richtung === 'frontal' || richtung === 'seitlich') && richtung !== ansicht && (
+            <button type="button" className="knopf klein still" style={{ alignSelf: 'flex-start' }} onClick={() => { const a = richtung; setRichtung(null); setStatus(null); ansichtSetzen(a) }}>
+              Auf „{richtung === 'frontal' ? 'Von vorn' : 'Von der Seite'}“ umstellen
+            </button>
+          )}
           {messung && ansicht === 'seitlich' && (
             <button type="button" className="knopf klein still" style={{ alignSelf: 'flex-start' }} onClick={() => seiteWechseln()}>
               Andere Körperseite messen (jetzt: {messung.seite === 'links' ? 'linke' : 'rechte'})
@@ -491,19 +552,19 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
           )}
           {figur && werte.length > 0 && (
             <div className="medien-werte">
-              {werte.map((g) => <span key={g.id}>{g.name} <b>{rund(messung?.winkel[g.id])}°</b></span>)}
+              {werte.map((g) => <span key={g.id}>{g.name} <b>{rund(figurWerte?.[g.id])}°</b></span>)}
             </div>
           )}
           <div className="reihe" style={{ flexWrap: 'wrap' }}>
             {halten ? (
-              <button type="button" className="knopf primaer" disabled={!figur} onClick={() => uebernimm('ende')}>Als Halteposition übernehmen</button>
+              <button type="button" className="knopf primaer" disabled={!figur || analyse} onClick={() => uebernimm('ende')}>Als Halteposition übernehmen</button>
             ) : (
               <>
-                <button type="button" className={`knopf${phase === 'start' ? ' primaer' : ''}`} disabled={!figur} onClick={() => uebernimm('start')}>Als Ausgangsposition</button>
-                <button type="button" className={`knopf${phase === 'ende' ? ' primaer' : ''}`} disabled={!figur} onClick={() => uebernimm('ende')}>Als Endposition</button>
+                <button type="button" className={`knopf${phase === 'start' ? ' primaer' : ''}`} disabled={!figur || analyse} onClick={() => uebernimm('start')}>Als Ausgangsposition</button>
+                <button type="button" className={`knopf${phase === 'ende' ? ' primaer' : ''}`} disabled={!figur || analyse} onClick={() => uebernimm('ende')}>Als Endposition</button>
               </>
             )}
-            {datei.art === 'video' && !halten && <button type="button" className="knopf" onClick={() => void automatisch()}><Icon name="aktualisieren" groesse={18} />Automatisch finden</button>}
+            {datei.art === 'video' && !halten && <button type="button" className="knopf" disabled={analyse} onClick={() => void automatisch()}><Icon name="aktualisieren" groesse={18} />{analyse ? 'Wird analysiert …' : 'Automatisch finden'}</button>}
             <label className="knopf still">
               <input type="file" accept="image/*,video/*" hidden onChange={(e) => waehlen(e.target.files?.[0])} />Andere Datei
             </label>

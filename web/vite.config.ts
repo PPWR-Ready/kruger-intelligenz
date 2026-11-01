@@ -40,6 +40,8 @@ export default defineConfig({
     mediapipeWasm(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registrierung in main.tsx, damit die App auch im Hintergrund regelmäßig nach Updates sucht
+      injectRegister: false,
       includeAssets: ['favicon-32.png', 'favicon-48.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Rückgrat Donaueschingen',
