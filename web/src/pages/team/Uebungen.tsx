@@ -7,7 +7,7 @@ import { relativ } from '../../lib/zeit'
 import type { InhaltStatus, Uebung } from '../../lib/db'
 import { Ladefehler, Fehler, Laden, useMitteilung, useUngespeichertWarnung, verlassenOk } from '../../components/Bausteine'
 import { Icon } from '../../components/Icon'
-import { Bewegungserfassung } from './Bewegungserfassung'
+import { Bewegungserfassung, zaehlenAusFigur } from './Bewegungserfassung'
 import { KameraBuehne, type Bild } from '../../components/KameraBuehne'
 import { GELENK, gelenkeFuer, type GelenkId } from '../../lib/pose/geometrie'
 import { Auswertung, PHASEN, STANDARD_ZAEHLEN, benoetigteGelenke, leereRegeln, leseRegeln, type Modus, type Phase, type Pruefung, type Regeln, type Stand } from '../../lib/pose/regeln'
@@ -44,7 +44,7 @@ export function TeamUebungen() {
     <>
       <header className="reihe zwischen" style={{ flexWrap: 'wrap' }}>
         <div className="stapel" style={{ gap: 4 }}>
-          <p className="eyebrow">Trainer-Modus</p>
+          <p className="eyebrow">Kamera-Übungen</p>
           <h1 className="titel">Übungen</h1>
         </div>
         <Link to="/team/uebungen/neu" className="knopf primaer"><Icon name="plus" groesse={18} staerke={2} />Neue Übung</Link>
@@ -118,7 +118,8 @@ export function TeamUebungEditor() {
         setName(u.name); setKategorie(u.kategorie ?? ''); setAnGeraet(u.an_geraet); setBeschreibung(u.beschreibung ?? '')
         const roh = (u.regeln ?? {}) as Partial<Regeln>
         const basis = leereRegeln(roh.modus === 'halten' ? 'halten' : 'wiederholungen')
-        setR({ ...basis, ...roh, pruefungen: (roh.pruefungen ?? []).map((p) => ({ ...p, id: p.id || neueId() })) } as Regeln)
+        // Fehlende Felder nicht mit Standardwerten auffüllen, die der Trainer nie gewählt hat
+        setR({ ...basis, ...roh, endhalten_sekunden: roh.endhalten_sekunden ?? null, pruefungen: (roh.pruefungen ?? []).map((p) => ({ ...p, id: p.id || neueId() })) } as Regeln)
       }
       setGeladen(true)
     })
@@ -130,21 +131,34 @@ export function TeamUebungEditor() {
 
   function modusWechseln(m: Modus) {
     const basis = leereRegeln(m)
-    setR((x) => ({
-      ...basis, ansicht: x.ansicht, figur: x.figur, figur_vorn: x.figur_vorn,
-      zaehlen: m === 'wiederholungen' ? { ...STANDARD_ZAEHLEN[x.ansicht] } : null,
-      pruefungen: x.pruefungen.map((p) => (m === 'halten' ? { ...p, wann: 'immer' } : p)),
-    }))
+    setGeaendert(true)
+    setR((x) => {
+      const neu: Regeln = {
+        ...basis, ansicht: x.ansicht, figur: x.figur, figur_vorn: x.figur_vorn,
+        zaehlen: m === 'wiederholungen' ? { ...STANDARD_ZAEHLEN[x.ansicht] } : null,
+        pruefungen: x.pruefungen.map((p) => (m === 'halten' ? { ...p, wann: 'immer' } : p)),
+      }
+      // Zählgelenk aus der schon erfassten Bewegung ableiten
+      return m === 'wiederholungen' ? { ...neu, zaehlen: zaehlenAusFigur(neu) ?? neu.zaehlen } : neu
+    })
   }
-  const aendere = (teil: Partial<Regeln>) => setR((x) => ({ ...x, ...teil }))
-  const aenderePruefung = (pid: string, teil: Partial<Pruefung>) =>
-    setR((x) => ({ ...x, pruefungen: x.pruefungen.map((p) => (p.id === pid ? { ...p, ...teil } : p)) }))
+  const aendere = (teil: Partial<Regeln>) => { setGeaendert(true); setR((x) => ({ ...x, ...teil })) }
+  const aenderePruefung = (pid: string, teil: Partial<Pruefung>) => {
+    setGeaendert(true)
+    // Grenzen von Hand geändert: nicht mehr automatisch nachführen
+    const fest = 'min' in teil || 'max' in teil ? { fest: true } : {}
+    setR((x) => ({ ...x, pruefungen: x.pruefungen.map((p) => (p.id === pid ? { ...p, ...teil, ...fest } : p)) }))
+  }
 
   async function speichern(ziel: 'behalten' | 'einreichen' | 'freigeben' | 'archivieren') {
     if (!s.profil) return
     setFehler(null)
     if (!name.trim()) return setFehler('Bitte gib der Übung einen Namen.')
     if (ziel !== 'behalten' && ziel !== 'archivieren' && !pruefung.regeln) return setFehler('Die Kamera-Regeln sind noch nicht vollständig (siehe Hinweise).')
+    // Eine freigegebene oder eingereichte Übung darf nicht mit kaputten Regeln live gehen
+    if (ziel === 'behalten' && !pruefung.regeln && (uebung?.status === 'freigegeben' || uebung?.status === 'eingereicht')) {
+      return setFehler('Die Kamera-Regeln sind unvollständig (siehe Hinweise). So würden Mitglieder die Übung ohne Kamera sehen – bitte erst vervollständigen.')
+    }
     setSpeichert(true)
     try {
       const status: InhaltStatus =
@@ -300,7 +314,7 @@ export function TeamUebungEditor() {
               <button type="button" className="knopf primaer" onClick={() => setTest(true)}><Icon name="kamera" groesse={20} />Kamera-Test starten</button>
             </div>
           ) : (
-            <Messmodus regeln={pruefung.regeln} zaehlGelenk={r.zaehlen?.gelenk ?? null}
+            <Messmodus ansicht={r.ansicht} regeln={pruefung.regeln} zaehlGelenk={r.zaehlen?.gelenk ?? null}
               uebernehmen={(feld, wert) => r.zaehlen && aendere({ zaehlen: { ...r.zaehlen, [feld]: wert } })}
               beenden={() => setTest(false)} />
           )}
@@ -332,7 +346,8 @@ function Zahlfeld({ label, wert, beiAenderung, schmal }: { label: string; wert: 
 }
 
 /** Live-Messung aller Winkel plus Probelauf der aktuellen (ungespeicherten) Regeln. */
-function Messmodus({ regeln, zaehlGelenk, uebernehmen, beenden }: {
+function Messmodus({ ansicht, regeln, zaehlGelenk, uebernehmen, beenden }: {
+  ansicht: Regeln['ansicht']
   regeln: Regeln | null
   zaehlGelenk: GelenkId | null
   uebernehmen: (feld: 'start' | 'umkehr', wert: number) => void
@@ -362,7 +377,7 @@ function Messmodus({ regeln, zaehlGelenk, uebernehmen, beenden }: {
     }
   }, [])
 
-  const liste = gelenkeFuer(regeln?.ansicht ?? 'seitlich')
+  const liste = gelenkeFuer(ansicht)
   const anzeige = regeln ? benoetigteGelenke(regeln) : liste.map((g) => g.id)
   const aktuell = zaehlGelenk && winkel?.[zaehlGelenk] != null ? Math.round(winkel[zaehlGelenk] as number) : null
 
