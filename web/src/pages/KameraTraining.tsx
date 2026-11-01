@@ -9,6 +9,7 @@ import type { Uebung } from '../lib/db'
 import { KameraBuehne, type Bild } from '../components/KameraBuehne'
 import { Fehler, Laden, Schalter, Skala } from '../components/Bausteine'
 import { ErklaervideoLink } from '../components/Erklaervideo'
+import type { Ausrichtung } from '../lib/pose/ausrichtung'
 import { Icon } from '../components/Icon'
 import { Auswertung, benoetigteGelenke, leseRegeln, satzQualitaet, type Korrektur, type Regeln, type Stand } from '../lib/pose/regeln'
 import { GELENK } from '../lib/pose/geometrie'
@@ -72,6 +73,23 @@ export function KameraTraining() {
 
   const sprich = useCallback((text: string) => { if (tonRef.current) vorlesen(text) }, [])
 
+  // Ausrichtung vor der Kamera („Geh ein Stück nach links“): anzeigen und ansagen,
+  // dieselbe Ansage höchstens alle 6 Sekunden
+  const [ausrichtung, setAusrichtung] = useState<Ausrichtung | null>(null)
+  const ausrichtungRef = useRef<Ausrichtung | null>(null)
+  const letzteAnsage = useRef<{ text: string; zeit: number }>({ text: '', zeit: 0 })
+  const ansagen = useCallback((text: string) => {
+    const jetzt = performance.now()
+    if (letzteAnsage.current.text === text && jetzt - letzteAnsage.current.zeit < 6000) return
+    letzteAnsage.current = { text, zeit: jetzt }
+    sprich(text)
+  }, [sprich])
+  const beiAusrichtung = useCallback((a: Ausrichtung | null) => {
+    ausrichtungRef.current = a
+    setAusrichtung(a)
+    if (a) ansagen(a.text)
+  }, [ansagen])
+
   // Countdown 3-2-1, damit man sich in Position bringen kann, bevor gezählt wird
   const [countdown, setCountdown] = useState<number | null>(null)
   const countdownUhr = useRef(0)
@@ -118,8 +136,10 @@ export function KameraTraining() {
         hinweisBis.current = b.zeit + 3000
         continue
       }
-      setMeldung(e.text)
-      sprich(e.text)
+      // „Bitte ganz ins Bild“ durch die konkrete Richtung ersetzen, wenn bekannt
+      const text = e.art === 'nicht_im_bild' && ausrichtungRef.current ? ausrichtungRef.current.text : e.text
+      setMeldung(text)
+      if (e.art === 'nicht_im_bild') ansagen(text); else sprich(text)
       if (e.art !== 'fehler') hinweisBis.current = b.zeit + 2500
     }
     // Anzeige höchstens zehnmal pro Sekunde aktualisieren
@@ -260,7 +280,10 @@ export function KameraTraining() {
         </button>
       } />
 
-      <KameraBuehne gelenke={gelenke} fehler={aktiveGelenke} beimBild={beimBild} pausiert={schritt !== 'satz' || frage !== null} />
+      <KameraBuehne gelenke={gelenke} fehler={aktiveGelenke} beimBild={beimBild} pausiert={schritt !== 'satz' || frage !== null} beiAusrichtung={beiAusrichtung} />
+      {ausrichtung && (schritt === 'vorbereitung' || schritt === 'satz') && (
+        <div className="ausrichtung-hinweis" role="status"><Icon name="weiter" groesse={20} staerke={2.4} />{ausrichtung.text}</div>
+      )}
 
       {schritt === 'vorbereitung' && (
         <section className="stapel">
@@ -300,7 +323,7 @@ export function KameraTraining() {
             </div>
           )}
           <div className={`meldung ${meldung ? 'fehler' : hinweis ? 'lob' : 'ruhig'}`} role="status" aria-live="assertive">
-            {meldung ? <><Icon name="warnung" groesse={22} />{meldung}</> : hinweis ? <><Icon name="haken" groesse={22} />{hinweis}</> : stand.zustand === 'laeuft' ? 'Haltung wird geprüft' : 'Stell dich so hin, dass dein ganzer Körper zu sehen ist.'}
+            {meldung ? <><Icon name="warnung" groesse={22} />{meldung}</> : hinweis ? <><Icon name="haken" groesse={22} />{hinweis}</> : stand.zustand === 'laeuft' ? 'Haltung wird geprüft' : (ausrichtung?.text ?? 'Stell dich so hin, dass dein ganzer Körper zu sehen ist.')}
           </div>
           {frage && <FrageKarte frage={frage} schliessen={() => { vorlesenStoppen(); setFrage(null) }} />}
           <div className="knopfreihe">
@@ -405,9 +428,10 @@ function Reichweite({ fortschritt, best }: { fortschritt: number | null; best: n
 }
 
 function ansichtHinweis(r: Regeln): string {
-  return r.ansicht === 'seitlich'
-    ? 'Handy seitlich zu dir aufstellen oder vom Trainingspartner halten lassen.'
-    : 'Handy frontal vor dir aufstellen oder vom Trainingspartner halten lassen.'
+  // Erkennung misst in 3D – jede Richtung geht; seitlich oder schräg ist am genauesten
+  return r.ansicht === 'frontal'
+    ? 'Handy vor dir aufstellen oder vom Trainingspartner halten lassen, ganzer Körper im Bild. Die App sagt dir, wohin du dich stellen sollst.'
+    : 'Handy seitlich oder schräg vor dir aufstellen oder halten lassen, ganzer Körper im Bild. Die App sagt dir, wohin du dich stellen sollst.'
 }
 
 function SatzZusammenfassung({ regeln, stand }: { regeln: Regeln; stand: Stand }) {

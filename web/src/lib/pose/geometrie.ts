@@ -2,7 +2,8 @@
 // Gerechnet wird in Bildpunkten (x mal Breite, y mal Höhe), damit das
 // Seitenverhältnis der Kamera die Winkel nicht verzerrt.
 
-export interface Punkt { x: number; y: number; visibility?: number }
+/** Körperpunkt. Mit `z` (3D-Weltkoordinaten in Metern) sind Winkel unabhängig von der Blickrichtung. */
+export interface Punkt { x: number; y: number; z?: number; visibility?: number }
 
 /** Indizes der MediaPipe-Körperpunkte, die wir nutzen. */
 export const P = {
@@ -52,20 +53,20 @@ function aufSeite(index: number, seite: Seite): number {
 
 /** Winkel am Punkt b zwischen den Strecken b→a und b→c, in Grad (0–180). */
 export function winkel(a: Punkt, b: Punkt, c: Punkt): number {
-  const v1x = a.x - b.x, v1y = a.y - b.y
-  const v2x = c.x - b.x, v2y = c.y - b.y
-  const n = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y)
+  const v1x = a.x - b.x, v1y = a.y - b.y, v1z = (a.z ?? 0) - (b.z ?? 0)
+  const v2x = c.x - b.x, v2y = c.y - b.y, v2z = (c.z ?? 0) - (b.z ?? 0)
+  const n = Math.hypot(v1x, v1y, v1z) * Math.hypot(v2x, v2y, v2z)
   if (n === 0) return NaN
-  const cos = Math.min(1, Math.max(-1, (v1x * v2x + v1y * v2y) / n))
+  const cos = Math.min(1, Math.max(-1, (v1x * v2x + v1y * v2y + v1z * v2z) / n))
   return (Math.acos(cos) * 180) / Math.PI
 }
 
 /** Winkel der Strecke unten→oben gegen die Senkrechte (0 = senkrecht, 90 = waagerecht). */
 export function neigungZurSenkrechten(unten: Punkt, oben: Punkt): number {
-  const dx = oben.x - unten.x
-  const dy = unten.y - oben.y // Bild-y wächst nach unten
-  if (dx === 0 && dy === 0) return NaN
-  return (Math.atan2(Math.abs(dx), dy) * 180) / Math.PI
+  const dx = oben.x - unten.x, dz = (oben.z ?? 0) - (unten.z ?? 0)
+  const dy = unten.y - oben.y // y wächst nach unten
+  if (dx === 0 && dy === 0 && dz === 0) return NaN
+  return (Math.atan2(Math.hypot(dx, dz), dy) * 180) / Math.PI
 }
 
 const SICHTBAR_AB = 0.5
@@ -95,9 +96,38 @@ export function punkteSichtbar(lm: Punkt[], indizes: number[], seite: Seite): bo
  * Berechnet alle Gelenkwinkel einer Seite. Nicht sichtbare Gelenke ergeben null.
  * `breite`/`hoehe`: Bildmaße, damit x und y gleich skaliert sind.
  */
-export function gelenkwinkel(lm: Punkt[], seite: Seite, breite: number, hoehe: number): Record<GelenkId, number | null> {
+/**
+ * Wie seitlich die Kamera zur Person steht (1 = genau seitlich, 0 = von vorn/hinten),
+ * aus der Querachse Hüfte/Schulter in 3D.
+ */
+export function seitenAnteil(welt: Punkt[]): number {
+  const d = (a: number, b: number) => [welt[b].x - welt[a].x, welt[b].y - welt[a].y, (welt[b].z ?? 0) - (welt[a].z ?? 0)]
+  const h = d(P.hueftL, P.hueftR), s = d(P.schulterL, P.schulterR)
+  const q = [h[0] + s[0], h[1] + s[1], h[2] + s[2]]
+  return Math.abs(q[2]) / (Math.hypot(q[0], q[1], q[2]) || 1)
+}
+
+/**
+ * Gelenkwinkel aus jeder Blickrichtung. Mit 3D-Weltpunkten wird gemischt: von der Seite
+ * zählt die genaue Bildmessung (2D), von vorn die 3D-Schätzung, dazwischen fließend.
+ */
+export function gelenkwinkel(lm: Punkt[], seite: Seite, breite: number, hoehe: number, welt?: Punkt[] | null): Record<GelenkId, number | null> {
+  const flach = gelenkwinkelEinzeln(lm, seite, breite, hoehe, null)
+  if (!welt || welt.length !== lm.length) return flach
+  const tief = gelenkwinkelEinzeln(lm, seite, breite, hoehe, welt)
+  const g = Math.min(1, Math.max(0, (seitenAnteil(welt) - 0.75) / 0.17)) // ≤ 0,75 → nur 3D, ≥ 0,92 → nur 2D
+  const aus = {} as Record<GelenkId, number | null>
+  for (const id of Object.keys(flach) as GelenkId[]) {
+    const a = flach[id], b = tief[id]
+    aus[id] = a === null || b === null ? (b ?? a) : b + (a - b) * g
+  }
+  return aus
+}
+
+function gelenkwinkelEinzeln(lm: Punkt[], seite: Seite, breite: number, hoehe: number, welt: Punkt[] | null): Record<GelenkId, number | null> {
   const p = (i: number): Punkt => {
-    const q = lm[aufSeite(i, seite)]
+    const j = aufSeite(i, seite), q = lm[j]
+    if (welt) { const w = welt[j]; return { x: w.x, y: w.y, z: w.z ?? 0, visibility: q.visibility } }
     return { x: q.x * breite, y: q.y * hoehe, visibility: q.visibility }
   }
   const ergebnis = {} as Record<GelenkId, number | null>

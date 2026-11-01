@@ -4,8 +4,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { FigurDefs, MUSKELN, Mensch } from '../../components/UebungsBild'
 import { Icon } from '../../components/Icon'
-import { ANKER, STEHEN, VORLAGEN, ausKoerperpunkten, bildBezug, figurWinkel, setzeWinkel, zieheAnker, type Anker, type FigurPose, type XY } from '../../lib/pose/figur'
-import { GELENK, GELENKE, besteSeite, gelenkwinkel, type GelenkId } from '../../lib/pose/geometrie'
+import { ANKER, STEHEN, VORLAGEN, ausKoerperpunkten, ausWeltpunkten, bildBezug, seitlichkeit, figurWinkel, setzeWinkel, zieheAnker, type Anker, type FigurPose, type XY } from '../../lib/pose/figur'
+import { GELENK, GELENKE, besteSeite, gelenkwinkel, type GelenkId, type Punkt, type Seite } from '../../lib/pose/geometrie'
 import { erkenneBild } from '../../lib/pose/erkennung'
 import type { Pruefung, Regeln } from '../../lib/pose/regeln'
 
@@ -167,10 +167,20 @@ function Marionette({ pose, geist, muskelGelenk, aendern }: { pose: FigurPose; g
 // ---------------------------------------------------------------------------
 
 async function vermesse(el: HTMLVideoElement | HTMLImageElement, breite: number, hoehe: number) {
-  const punkte = await erkenneBild(el)
+  const { punkte, welt } = await erkenneBild(el)
   if (!punkte.length) return null
-  const seite = besteSeite(punkte)
-  return { punkte, seite, pose: ausKoerperpunkten(punkte, seite, breite, hoehe), winkel: gelenkwinkel(punkte, seite, breite, hoehe) }
+  return auswerten(punkte, welt, besteSeite(punkte), breite, hoehe)
+}
+
+/**
+ * Winkel in 3D (aus jeder Richtung gleich). Die Figur: von der Seite direkt aus dem Bild
+ * (dann liegt das Skelett genau auf der Person), sonst aus den 3D-Punkten in die
+ * Seitenansicht gedreht.
+ */
+function auswerten(punkte: Punkt[], welt: Punkt[] | null, seite: Seite, breite: number, hoehe: number) {
+  const seitlich = (seitlichkeit(welt) ?? 1) > 0.75
+  const pose = seitlich || !welt ? ausKoerperpunkten(punkte, seite, breite, hoehe) : ausWeltpunkten(welt, seite)
+  return { punkte, welt, seite, seitlich, pose, winkel: gelenkwinkel(punkte, seite, breite, hoehe, welt) }
 }
 type Messung = NonNullable<Awaited<ReturnType<typeof vermesse>>>
 
@@ -211,7 +221,7 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     try {
       const m = await vermesse(el, b, h)
       setMessung(m)
-      setStatus(!m ? 'Keine Person erkannt. Am besten seitlich, ganzer Körper im Bild, gutes Licht.' : !m.pose ? 'Nicht alle Körperpunkte sind sichtbar – bitte ganzer Körper im Bild.' : null)
+      setStatus(!m ? 'Keine Person erkannt. Bitte ganzer Körper im Bild und gutes Licht.' : !m.pose ? 'Nicht alle Körperpunkte sind sichtbar – bitte ganzer Körper im Bild.' : !m.seitlich ? 'Von vorn bzw. schräg aufgenommen: Die Winkel werden in 3D gemessen, die Figur oben rechts zeigt die Seitenansicht.' : null)
       zeichne(m)
     } catch (e) {
       console.error('Vermessung fehlgeschlagen', e)
@@ -248,6 +258,18 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     } else if (erkannt) {
       skelett(erkannt, '#f2a41c', 4, true)
     }
+    // Nicht von der Seite aufgenommen: eingestellte Figur als kleine Seitenansicht einblenden
+    if (m && !m.seitlich) {
+      const g = Math.min(c.width, c.height) * 0.38, x0 = c.width - g - 10 * px, y0 = 10 * px
+      ctx.fillStyle = 'rgba(255,255,255,0.88)'
+      ctx.beginPath(); ctx.roundRect(x0, y0, g, g, 12 * px); ctx.fill()
+      ctx.fillStyle = '#8f5208'; ctx.font = `600 ${11 * px}px Inter, sans-serif`
+      ctx.fillText('Seitenansicht (3D)', x0 + 8 * px, y0 + 16 * px)
+      const q = (a: Anker): [number, number] => [x0 + (posen[phase][a][0] / 100) * g, y0 + (posen[phase][a][1] / 100) * g]
+      skelett(q, '#f2a41c', 3, false)
+      ctx.fillStyle = '#2a2622'
+      for (const { id } of ANKER) { ctx.beginPath(); ctx.arc(...q(id), 3 * px, 0, Math.PI * 2); ctx.fill() }
+    }
   }
   const zeichneAktuell = useRef(zeichne)
   zeichneAktuell.current = zeichne
@@ -259,7 +281,7 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     if (!el) return
     const b = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
     const h = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
-    const zuBild = bildBezug(m.punkte, m.seite, b, h)
+    const zuBild = m.seitlich ? bildBezug(m.punkte, m.seite, b, h) : null
     if (zuBild) setBezug((x) => ({ ...x, [ph]: { zuBild, zeit: video.current?.currentTime ?? 0 } }))
   }
 
@@ -269,7 +291,7 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     const b = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
     const h = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
     const seite = messung.seite === 'links' ? 'rechts' : 'links'
-    const m: Messung = { ...messung, seite, pose: ausKoerperpunkten(messung.punkte, seite, b, h), winkel: gelenkwinkel(messung.punkte, seite, b, h) }
+    const m: Messung = auswerten(messung.punkte, messung.welt, seite, b, h)
     setMessung(m); zeichne(m)
   }
 
@@ -296,7 +318,8 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     const s = liste[0]
     const e = liste.reduce((a, x) => (Math.abs((x.m.winkel[best] ?? 0) - (s.m.winkel[best] ?? 0)) > Math.abs((a.m.winkel[best] ?? 0) - (s.m.winkel[best] ?? 0)) ? x : a), liste[0])
     beide(s.m.pose as FigurPose, e.m.pose as FigurPose)
-    const zs = bildBezug(s.m.punkte, s.m.seite, v.videoWidth, v.videoHeight), ze = bildBezug(e.m.punkte, e.m.seite, v.videoWidth, v.videoHeight)
+    const zs = s.m.seitlich ? bildBezug(s.m.punkte, s.m.seite, v.videoWidth, v.videoHeight) : null
+    const ze = e.m.seitlich ? bildBezug(e.m.punkte, e.m.seite, v.videoWidth, v.videoHeight) : null
     setBezug({ ...(zs ? { start: { zuBild: zs, zeit: s.t } } : {}), ...(ze ? { ende: { zuBild: ze, zeit: e.t } } : {}) })
     await springe(v, e.t); setZeit(e.t)
     setMessung(e.m); zeichne(e.m)
@@ -310,7 +333,7 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
           <input type="file" accept="image/*,video/*" onChange={(e) => waehlen(e.target.files?.[0])} />
           <Icon name="hochladen" groesse={28} />
           <strong>Foto oder Video der perfekten Ausführung</strong>
-          <span className="klein leise">Seitlich aufgenommen, ganzer Körper im Bild. Die Datei wird nur hier im Browser vermessen und nicht hochgeladen.</span>
+          <span className="klein leise">Aus jeder Richtung – am genauesten seitlich oder schräg von vorn, ganzer Körper im Bild. Die Datei wird nur hier im Browser vermessen und nicht hochgeladen.</span>
         </label>
       ) : (
         <>
