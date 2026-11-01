@@ -33,6 +33,55 @@ export function erkennungLaden(): Promise<PoseLandmarker> {
   return laden
 }
 
+// --- Fotos und einzelne Videobilder (Übungs-Editor) -------------------------
+// Eigene Erkennung im Bild-Modus: unabhängig von den Zeitstempeln der Live-Kamera
+// und mit verkleinertem Bild (große Handyfotos überschreiten sonst die Grafik-Grenzen).
+
+let bildLaden: Promise<{ lm: PoseLandmarker; gpu: boolean }> | null = null
+
+function bildErkennungLaden(gpu: boolean) {
+  return (async () => {
+    const { FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision')
+    const dateien = await FilesetResolver.forVisionTasks(__MEDIAPIPE_PFAD__.replace(/\/$/, ''))
+    const lm = await PoseLandmarker.createFromOptions(dateien, {
+      baseOptions: { modelAssetPath: MODELL, delegate: gpu ? 'GPU' : 'CPU' },
+      runningMode: 'IMAGE', numPoses: 1, minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.4,
+    })
+    return { lm, gpu }
+  })()
+}
+
+/** Zeichnet Foto oder Videobild verkleinert (max. 1280 px) auf eine Leinwand. */
+function verkleinert(el: HTMLImageElement | HTMLVideoElement): HTMLCanvasElement {
+  const b = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
+  const h = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
+  if (!b || !h) throw new Error('Das Bild ist noch nicht geladen.')
+  const f = Math.min(1, 1280 / Math.max(b, h))
+  const c = document.createElement('canvas')
+  c.width = Math.round(b * f); c.height = Math.round(h * f)
+  c.getContext('2d')?.drawImage(el, 0, 0, c.width, c.height)
+  return c
+}
+
+/**
+ * Körperpunkte in einem Foto oder dem aktuellen Videobild. Die Koordinaten sind
+ * Anteile (0–1) und passen damit auch zum Originalbild. Fällt die Grafik-Berechnung
+ * aus, wird automatisch auf den Prozessor gewechselt.
+ */
+export async function erkenneBild(el: HTMLImageElement | HTMLVideoElement): Promise<Punkt[]> {
+  const leinwand = verkleinert(el)
+  bildLaden ??= bildErkennungLaden(true).catch(() => bildErkennungLaden(false))
+  let { lm, gpu } = await bildLaden.catch((e) => { bildLaden = null; throw e })
+  try {
+    return (lm.detect(leinwand).landmarks[0] ?? []) as Punkt[]
+  } catch (e) {
+    if (!gpu) throw e
+    bildLaden = bildErkennungLaden(false)
+    ;({ lm, gpu } = await bildLaden)
+    return (lm.detect(leinwand).landmarks[0] ?? []) as Punkt[]
+  }
+}
+
 /** Körperpunkte für das aktuelle Videobild, oder leer, wenn niemand erkannt wurde. */
 export function erkenne(lm: PoseLandmarker, video: HTMLVideoElement, zeit: number): Punkt[] {
   const r = lm.detectForVideo(video, zeit)
