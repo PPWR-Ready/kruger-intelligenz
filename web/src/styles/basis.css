@@ -346,3 +346,38 @@ a.uebung-karte:hover { box-shadow: 0 2px 4px rgba(38, 30, 20, 0.06), 0 8px 24px 
 .video-rahmen { position: relative; }
 .video-rahmen video { display: block; width: 100%; max-height: 88dvh; aspect-ratio: 9 / 16; border-radius: 22px; background: #f7f5f1; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
 .video-zu { position: absolute; top: -14px; right: -14px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; color: var(--text); font-size: 28px; line-height: 1; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+.erfassung { gap: 16px; }
+.segment { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 16px; background: var(--surface-2); }
+.segment button { min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--text-soft); font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+.segment button[aria-selected='true'] { background: var(--surface); color: var(--text); box-shadow: var(--schatten); }
+.phasen { display: flex; gap: 8px; }
+.phasen button { flex: 1; min-height: 44px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text-soft); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+.phasen button[aria-selected='true'] { border-color: var(--accent); background: #fbf0db; color: var(--text); }
+.phasen-nr { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--text); font-size: 12px; display: grid; place-items: center; }
+.marionette { width: 100%; max-width: 420px; aspect-ratio: 1; align-self: center; border-radius: 18px; background: linear-gradient(180deg, #ffffff, #f1ede7); touch-action: none; user-select: none; }
+.mario-boden { stroke: rgba(42, 38, 34, 0.18); stroke-width: 0.8; stroke-linecap: round; }
+.mario-knochen { stroke: rgba(242, 164, 28, 0.55); stroke-width: 0.9; stroke-dasharray: 1.6 1.4; pointer-events: none; }
+.mario-anker { cursor: grab; }
+.marionette.zieht .mario-anker { cursor: grabbing; }
+.mario-griff { fill: rgba(242, 164, 28, 0.001); }
+.mario-anker:hover .mario-griff, .mario-anker.aktiv .mario-griff { fill: rgba(242, 164, 28, 0.22); }
+.mario-punkt { fill: var(--accent); stroke: #fff; stroke-width: 0.9; }
+.mario-anker.wurzel .mario-punkt { fill: #2a2622; }
+.medien-ablage { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 18px; border: 2px dashed var(--line-stark); border-radius: 18px; text-align: center; cursor: pointer; background: var(--bg); }
+.medien-ablage input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.medien-ablage:hover { border-color: var(--accent); }
+.medien-buehne { position: relative; border-radius: 18px; overflow: hidden; background: #1f1b18; max-height: 60dvh; display: flex; justify-content: center; }
+.medien-buehne img, .medien-buehne video { display: block; max-width: 100%; max-height: 60dvh; object-fit: contain; }
+.medien-buehne canvas { position: absolute; top: 0; left: 50%; transform: translateX(-50%); pointer-events: none; }
+.medien-werte { display: flex; flex-wrap: wrap; gap: 6px; }
+.medien-werte span { font-size: 13px; padding: 4px 10px; border-radius: 10px; background: var(--surface-2); }
+.winkel-zeile { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--bg); }
+.winkel-zeile.zaehlt { background: #fbf0db; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.winkel-name { font-weight: 600; }
+.regler { display: grid; grid-template-columns: 62px 1fr 52px; align-items: center; gap: 10px; }
+.regler-name { font-size: 13px; color: var(--muted); }
+.regler-wert { text-align: right; font-variant-numeric: tabular-nums; }
+.regler-bahn { position: relative; display: flex; align-items: center; height: 32px; }
+.regler-bahn input { width: 100%; accent-color: var(--accent); height: 32px; }
+.regler-marke { position: absolute; top: 3px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--success); pointer-events: none; }
+.zaehl-info { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: #fbf0db; }
