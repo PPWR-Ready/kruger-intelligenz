@@ -337,3 +337,12 @@ a.uebung-karte:hover { box-shadow: 0 2px 4px rgba(38, 30, 20, 0.06), 0 8px 24px 
 .uebung-fakten { display: flex; flex-wrap: wrap; gap: 6px; }
 .uebung-fakten span { font-size: 13px; padding: 3px 9px; border-radius: 10px; background: var(--surface-2); color: var(--text-soft); }
 .uebung-start { margin-top: 2px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--accent-text); }
+.erklaer-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 16px 6px 6px; border: 0; border-radius: 24px; background: var(--surface); box-shadow: var(--schatten); color: var(--text); font-size: 15px; font-weight: 600; cursor: pointer; }
+.erklaer-link.klein { box-shadow: 0 0 0 1px var(--line); font-size: 14px; }
+.erklaer-link .leise { font-weight: 400; }
+.erklaer-play { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--text); display: grid; place-items: center; padding-left: 2px; }
+.video-dialog { border: 0; padding: 0; background: transparent; max-width: min(92vw, 440px); max-height: 92dvh; overflow: visible; }
+.video-dialog::backdrop { background: rgba(20, 16, 12, 0.72); }
+.video-rahmen { position: relative; }
+.video-rahmen video { display: block; width: 100%; max-height: 88dvh; aspect-ratio: 9 / 16; border-radius: 22px; background: #f7f5f1; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+.video-zu { position: absolute; top: -14px; right: -14px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #fff; color: var(--text); font-size: 28px; line-height: 1; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }

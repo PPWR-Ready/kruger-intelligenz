@@ -5,6 +5,7 @@ import type { Uebung } from '../lib/db'
 import { leseRegeln } from '../lib/pose/regeln'
 import { Icon } from '../components/Icon'
 import { UebungsBild } from '../components/UebungsBild'
+import { ErklaervideoLink } from '../components/Erklaervideo'
 
 export function Trainieren() {
   const [uebungen, setUebungen] = useState<Uebung[] | null>(null)
@@ -21,6 +22,7 @@ export function Trainieren() {
       <p className="leise" style={{ margin: '-8px 0 0', fontSize: 16 }}>
         Wähle eine Übung. Die App erkennt deine Haltung, zählt mit und sagt dir live, wenn du nachkorrigieren solltest – das Bild bleibt auf deinem Gerät.
       </p>
+      <ErklaervideoLink />
 
       <section className="stapel" style={{ gap: 14 }}>
         {uebungen === null ? null : uebungen.length === 0 ? (
