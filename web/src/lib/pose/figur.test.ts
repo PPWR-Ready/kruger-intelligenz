@@ -1,4 +1,4 @@
-import { STEHEN, alsKoerperpunkte, ausKoerperpunkten, figurWinkel, zieheAnker } from './figur'
+import { STEHEN, alsKoerperpunkte, ausKoerperpunkten, bildBezug, figurWinkel, setzeWinkel, zieheAnker } from './figur'
 import { gelenkwinkel } from './geometrie'
 
 const laenge = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1])
@@ -34,5 +34,36 @@ describe('Figur / Marionette', () => {
     const ueberFigur = figurWinkel(ausKoerperpunkten(foto, 'links', 1280, 720)!)
     expect(ueberFigur.knie).toBeCloseTo(direkt.knie as number, 1)
     expect(ueberFigur.huefte).toBeCloseTo(direkt.huefte as number, 1)
+  })
+})
+
+describe('Winkel per Schieberegler', () => {
+  it.each(['knie', 'ellbogen', 'schulter', 'huefte', 'sprunggelenk', 'koerperlinie', 'rumpfneigung', 'kopfhaltung'] as const)('%s lässt sich genau einstellen', (g) => {
+    const basis = zieheAnker(zieheAnker(STEHEN, 'huefte', [44, 66]), 'hand', [64, 46])
+    for (const ziel of [20, 60, 95, 140, 175]) {
+      if ((g === 'rumpfneigung' || g === 'kopfhaltung') && ziel > 90) continue
+      if (g === 'sprunggelenk' && ziel > 130) continue // Fußspitze würde unter den Boden (am Bildrand begrenzt)
+      const p = setzeWinkel(basis, g, ziel)
+      expect(figurWinkel(p)[g]).toBeCloseTo(ziel, 0)
+    }
+  })
+  it('Knie aus gestreckter Haltung beugt so, dass der Unterschenkel nach hinten geht', () => {
+    const p = setzeWinkel(STEHEN, 'knie', 90)
+    expect(p.fuss[0]).toBeLessThan(STEHEN.knie[0])
+  })
+  it('Bild-Bezug ist die Umkehrung', () => {
+    const lm = alsKoerperpunkte(zieheAnker(STEHEN, 'huefte', [44, 66])).map((q) => ({ ...q, x: q.x * 0.5 + 0.2, y: q.y * 0.8 }))
+    const pose = ausKoerperpunkten(lm, 'links', 1000, 600)!
+    const zu = bildBezug(lm, 'links', 1000, 600)!
+    const [x, y] = zu(pose.knie)
+    expect(x).toBeCloseTo(lm[25].x, 2)
+    expect(y).toBeCloseTo(lm[25].y, 2)
+  })
+})
+
+describe('Rumpfneigung nach vorn', () => {
+  it('auch nachdem das Knie gebeugt wurde', () => {
+    const p = setzeWinkel(setzeWinkel(STEHEN, 'knie', 90), 'rumpfneigung', 30)
+    expect(p.schulter[0]).toBeGreaterThan(p.huefte[0])
   })
 })

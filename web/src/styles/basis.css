@@ -381,3 +381,4 @@ a.uebung-karte:hover { box-shadow: 0 2px 4px rgba(38, 30, 20, 0.06), 0 8px 24px 
 .regler-bahn input { width: 100%; accent-color: var(--accent); height: 32px; }
 .regler-marke { position: absolute; top: 3px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--success); pointer-events: none; }
 .zaehl-info { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: #fbf0db; }
+.spielraum { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 12px; background: var(--surface); }
