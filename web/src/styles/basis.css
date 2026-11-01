@@ -324,7 +324,7 @@ h1, h2, h3 { margin: 0; }
 .uebung-karte { display: flex; align-items: stretch; gap: 14px; padding: 10px; background: var(--surface); border-radius: var(--radius-gross); box-shadow: var(--schatten); text-decoration: none; color: inherit; transition: transform 0.1s, box-shadow 0.15s; }
 a.uebung-karte:active { transform: scale(0.985); }
 a.uebung-karte:hover { box-shadow: 0 2px 4px rgba(38, 30, 20, 0.06), 0 8px 24px rgba(38, 30, 20, 0.09); }
-.uebung-bild-flaeche { flex-shrink: 0; width: 112px; border-radius: 16px; background: linear-gradient(160deg, #f6efe4, #e9dcc8); display: grid; place-items: center; }
+.uebung-bild-flaeche { flex-shrink: 0; width: 112px; border-radius: 16px; background: linear-gradient(180deg, #ffffff, #f1ede7); display: grid; place-items: center; }
 .uebungs-bild .glied { fill: none; stroke: #2a2622; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
 .uebungs-bild .kopf { fill: #2a2622; }
 .uebungs-bild .marke { fill: var(--accent); stroke: #fff; stroke-width: 1.5; }
