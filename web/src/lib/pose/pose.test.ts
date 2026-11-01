@@ -1,6 +1,6 @@
 // Tests für Winkelberechnung und Regel-Auswertung des Trainer-Modus.
 import { P, besteSeite, gelenkwinkel, neigungZurSenkrechten, winkel, type GelenkId, type Punkt } from './geometrie'
-import { Auswertung, MELDUNG_NICHT_IM_BILD, leseRegeln, satzQualitaet, type Regeln } from './regeln'
+import { Auswertung, MELDUNG_HALTEN_FERTIG, MELDUNG_HALTEN_START, MELDUNG_NICHT_IM_BILD, leseRegeln, meldungZuKurz, satzQualitaet, type Regeln } from './regeln'
 
 const leer = (): Record<GelenkId, number | null> =>
   ({ knie: null, huefte: null, ellbogen: null, schulter: null, sprunggelenk: null, koerperlinie: null, rumpfneigung: null, kopfhaltung: null })
@@ -192,5 +192,47 @@ describe('satzQualitaet', () => {
     expect(satzQualitaet(['sauber', 'sauber', 'sauber', 'sauber', 'anpassen'], 1)).toBe('sauber')
     expect(satzQualitaet(['sauber', 'anpassen'], 1)).toBe('gut')
     expect(satzQualitaet(['anpassen', 'anpassen', 'sauber'], 2)).toBe('anpassen')
+  })
+})
+
+describe('Auswertung mit Halten in der Endposition', () => {
+  const mitHalten: Regeln = { ...kniebeuge, endhalten_sekunden: 3, ziel_wiederholungen: 2 }
+  const runter = [170, 150, 130, 110].map((knie) => ({ knie, rumpf: 20, frames: 4 }))
+  const hoch = [110, 130, 150, 170].map((knie) => ({ knie, rumpf: 20, frames: 4 }))
+
+  it('zählt erst, wenn die Endposition lange genug gehalten wurde', () => {
+    const a = new Auswertung(mitHalten)
+    const { ereignisse } = spiele(a, [...runter, { knie: 95, rumpf: 20, frames: 100 }, ...hoch])
+    expect(ereignisse).toContain(`halten_start:${MELDUNG_HALTEN_START}`)
+    expect(ereignisse).toContain('halten_zaehlen:2')
+    expect(ereignisse).toContain(`halten_fertig:${MELDUNG_HALTEN_FERTIG}`)
+    expect(a.stand().wiederholungen).toBe(1)
+  })
+
+  it('zu kurz gehalten: zählt nicht und sagt, wie lange', () => {
+    const a = new Auswertung(mitHalten)
+    const { ereignisse } = spiele(a, [...runter, { knie: 95, rumpf: 20, frames: 30 }, ...hoch])
+    expect(a.stand().wiederholungen).toBe(0)
+    expect(ereignisse).toContain(`unvollstaendig:${meldungZuKurz(3)}`)
+  })
+
+  it('Fehlhaltung hält die Uhr an', () => {
+    const a = new Auswertung(mitHalten)
+    spiele(a, [...runter, { knie: 95, rumpf: 70, frames: 100 }])
+    expect(a.stand().halteRest).toBeGreaterThan(2.5)
+    expect(a.stand().gehaltenInWdh).toBe(false)
+  })
+
+  it('merkt sich die weiteste Bewegung', () => {
+    const a = new Auswertung(mitHalten)
+    spiele(a, [...runter, { knie: 95, rumpf: 20, frames: 20 }, { knie: 80, rumpf: 20, frames: 20 }])
+    expect(a.stand().bestWinkel).toBe(80)
+    expect(a.stand().bestFortschritt).toBeGreaterThan(1)
+  })
+
+  it('liest die Haltezeit aus den Regeln', () => {
+    expect(leseRegeln({ ...mitHalten, endhalten_sekunden: 10 }).regeln?.endhalten_sekunden).toBe(10)
+    expect(leseRegeln({ ...mitHalten, endhalten_sekunden: 0 }).regeln?.endhalten_sekunden).toBeNull()
+    expect(leseRegeln({ ...mitHalten, endhalten_sekunden: 500 }).regeln).toBeNull()
   })
 })

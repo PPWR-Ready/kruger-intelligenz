@@ -68,7 +68,7 @@ export function TeamUebungen() {
                 return (
                   <tr key={z.id}>
                     <td><Link to={`/team/uebungen/${z.id}`} style={{ fontWeight: 600 }}>{z.name}</Link><div className="klein leise">{z.studio_id ? 'Studio' : 'Five'}{z.kategorie ? ` · ${z.kategorie}` : ''}{z.an_geraet ? ' · am Gerät' : ''}</div></td>
-                    <td className="leise">{r.regeln ? (r.regeln.modus === 'halten' ? `Halten ${r.regeln.halten_sekunden} s` : `Wiederholungen (${GELENK[r.regeln.zaehlen!.gelenk].name})`) : '–'}</td>
+                    <td className="leise">{r.regeln ? (r.regeln.modus === 'halten' ? `Halten ${r.regeln.halten_sekunden} s` : `Wiederholungen (${GELENK[r.regeln.zaehlen!.gelenk].name})${r.regeln.endhalten_sekunden ? ` · ${r.regeln.endhalten_sekunden} s halten` : ''}`) : '–'}</td>
                     <td>{r.regeln ? <span className="status erfolg">{r.regeln.pruefungen.length} Prüfungen</span> : <span className="status neutral">nicht eingerichtet</span>}</td>
                     <td><span className={`status ${STATUS[z.status].klasse}`}>{STATUS[z.status].text}</span></td>
                     <td className="leise">{relativ(z.updated_at)}</td>
@@ -237,8 +237,9 @@ export function TeamUebungEditor() {
                   <Zahlfeld label="Ausgangswinkel (°)" wert={r.zaehlen.start} beiAenderung={(v) => aendere({ zaehlen: { ...r.zaehlen!, start: v ?? 0 } })} />
                   <Zahlfeld label="Umkehrwinkel (°)" wert={r.zaehlen.umkehr} beiAenderung={(v) => aendere({ zaehlen: { ...r.zaehlen!, umkehr: v ?? 0 } })} />
                   <Zahlfeld label="Ziel-Wiederholungen" wert={r.ziel_wiederholungen} beiAenderung={(v) => aendere({ ziel_wiederholungen: v })} />
+                  <Zahlfeld label="Endposition halten (s)" wert={r.endhalten_sekunden ?? null} beiAenderung={(v) => aendere({ endhalten_sekunden: v })} />
                 </div>
-                <p className="klein leise" style={{ margin: 0 }}>{GELENK[r.zaehlen.gelenk].erklaerung} Eine Wiederholung zählt, wenn der Winkel vom Ausgangs- zum Umkehrwinkel und zurück geht.</p>
+                <p className="klein leise" style={{ margin: 0 }}>{GELENK[r.zaehlen.gelenk].erklaerung} Eine Wiederholung zählt, wenn der Winkel vom Ausgangs- zum Umkehrwinkel und zurück geht{r.endhalten_sekunden ? ` – und die Endposition ${r.endhalten_sekunden} Sekunden gehalten wurde. Weiter als der Umkehrwinkel ist erwünscht` : '. Leer oder 0 bei „Endposition halten“ = nicht halten'}.</p>
               </div>
             )}
             {r.modus === 'halten' && (

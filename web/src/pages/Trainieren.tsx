@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import type { Uebung } from '../lib/db'
 import { leseRegeln } from '../lib/pose/regeln'
 import { Icon } from '../components/Icon'
+import { UebungsBild } from '../components/UebungsBild'
 
 export function Trainieren() {
   const [uebungen, setUebungen] = useState<Uebung[] | null>(null)
@@ -13,43 +14,42 @@ export function Trainieren() {
       .then(({ data }) => setUebungen((data ?? []) as Uebung[]))
   }, [])
 
-  const mitKamera = (u: Uebung) => leseRegeln(u.regeln).regeln !== null
-
   return (
     <div className="seite">
       <h1 className="titel">Training</h1>
 
-      <section className="karte akzent">
-        <p className="eyebrow">Kamera-Coaching</p>
-        <p style={{ margin: 0, fontSize: 15 }}>
-          Wähle eine Übung mit Kamera-Symbol. Die App erkennt deine Haltung, zeigt Winkel live und sagt dir Bescheid, wenn etwas nicht stimmt. Das Bild bleibt auf deinem Gerät.
-        </p>
-      </section>
+      <p className="leise" style={{ margin: '-8px 0 0', fontSize: 16 }}>
+        Wähle eine Übung. Die App erkennt deine Haltung, zählt mit und sagt dir live, wenn du nachkorrigieren solltest – das Bild bleibt auf deinem Gerät.
+      </p>
 
-      <section className="stapel">
-        <h2 className="untertitel" style={{ fontSize: 17 }}>Übungen</h2>
+      <section className="stapel" style={{ gap: 14 }}>
         {uebungen === null ? null : uebungen.length === 0 ? (
           <div className="leer">Die Übungsbibliothek wird gerade vom Team aufgebaut.</div>
         ) : (
           uebungen.map((u) => {
-            const kamera = mitKamera(u)
+            const regeln = leseRegeln(u.regeln).regeln
+            const fakten = regeln ? [
+              regeln.modus === 'halten' ? `${regeln.halten_sekunden} s halten` : `${regeln.ziel_wiederholungen ?? 10} ×`,
+              ...(regeln.endhalten_sekunden ? [`je ${regeln.endhalten_sekunden} s halten`] : []),
+              regeln.ansicht === 'seitlich' ? 'Handy seitlich' : 'Handy frontal',
+            ] : []
             const inhalt = (
               <>
-                <span className="label-klein" style={{ color: 'var(--accent-text)' }}>
-                  {u.studio_id ? 'Studio' : 'Five'}{u.kategorie ? ` · ${u.kategorie}` : ''}{u.an_geraet ? ' · am Gerät' : ''}
-                </span>
-                <h3 style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {kamera && <Icon name="kamera" groesse={18} />}{u.name}
-                </h3>
-                {u.beschreibung && <p className="klein leise" style={{ margin: 0 }}>{u.beschreibung}</p>}
+                <div className="uebung-bild-flaeche"><UebungsBild regeln={regeln} /></div>
+                <div className="uebung-text">
+                  <span className="uebung-kategorie">{u.kategorie ?? (u.studio_id ? 'Studio' : 'Five')}{u.an_geraet ? ' · am Gerät' : ''}</span>
+                  <h3 className="uebung-name">{u.name}</h3>
+                  {fakten.length > 0 && <div className="uebung-fakten">{fakten.map((f) => <span key={f}>{f}</span>)}</div>}
+                  {regeln
+                    ? <span className="uebung-start"><Icon name="kamera" groesse={16} />Mit Kamera starten</span>
+                    : u.beschreibung && <p className="klein leise" style={{ margin: 0 }}>{u.beschreibung}</p>}
+                </div>
               </>
             )
-            return kamera ? (
-              <Link key={u.id} to={`/trainieren/${u.id}`} className="karte" style={{ gap: 6, textDecoration: 'none', color: 'inherit' }} aria-label={`${u.name} mit Kamera trainieren`}>
-                {inhalt}
-              </Link>
+            return regeln ? (
+              <Link key={u.id} to={`/trainieren/${u.id}`} className="uebung-karte" aria-label={`${u.name} mit Kamera trainieren`}>{inhalt}</Link>
             ) : (
-              <article key={u.id} className="karte" style={{ gap: 6 }}>{inhalt}</article>
+              <article key={u.id} className="uebung-karte">{inhalt}</article>
             )
           })
         )}
