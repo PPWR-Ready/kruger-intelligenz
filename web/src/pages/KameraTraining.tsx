@@ -8,6 +8,7 @@ import { useSitzung } from '../lib/sitzung'
 import type { Uebung } from '../lib/db'
 import { KameraBuehne, type Bild } from '../components/KameraBuehne'
 import { Fehler, Laden, Schalter, Skala } from '../components/Bausteine'
+import { ErklaervideoLink } from '../components/Erklaervideo'
 import { Icon } from '../components/Icon'
 import { Auswertung, benoetigteGelenke, leseRegeln, satzQualitaet, type Korrektur, type Regeln, type Stand } from '../lib/pose/regeln'
 import { GELENK } from '../lib/pose/geometrie'
@@ -270,6 +271,7 @@ export function KameraTraining() {
             </div>
           )}
           <p className="klein leise" style={{ margin: 0 }}>{ansichtHinweis(regeln)}{uebung.beschreibung ? ` ${uebung.beschreibung}` : ''}</p>
+          {saetze.length === 0 && <ErklaervideoLink klein />}
           {countdown !== null ? (
             <div className="countdown" role="status" aria-live="assertive">{countdown}</div>
           ) : (

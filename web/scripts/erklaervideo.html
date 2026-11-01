@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<style>
+@font-face { font-family: PF; src: url(fonts/pf.woff2); }
+@font-face { font-family: IN; src: url(fonts/i4.woff2); font-weight: 400; }
+@font-face { font-family: IN; src: url(fonts/i6.woff2); font-weight: 600; }
+@font-face { font-family: IN; src: url(fonts/i7.woff2); font-weight: 700; }
+html, body { margin: 0; background: #f7f5f1; }
+svg { display: block; }
+</style></head>
+<body><div id="b"></div>
+<script>
+const W = 720, H = 1280
+const ORANGE = '#f2a41c', ORANGE_T = '#8f5208', TEXT = '#1a1a1a', MUTED = 'rgba(20,20,20,0.62)', ROT = '#c4402f', GRUEN = '#3d7a1f'
+
+// ---------- Zeitachse ----------
+const SZENEN = [
+  { id: 'titel', von: 0, bis: 3.2 },
+  { id: 'waehlen', von: 3.2, bis: 7.6 },
+  { id: 'aufstellen', von: 7.6, bis: 12.6 },
+  { id: 'countdown', von: 12.6, bis: 16.4 },
+  { id: 'halten', von: 16.4, bis: 26 },
+  { id: 'korrektur', von: 26, bis: 30.2 },
+  { id: 'ergebnis', von: 30.2, bis: 34.4 },
+  { id: 'ende', von: 34.4, bis: 37.6 },
+]
+const DAUER = SZENEN.at(-1).bis
+
+// ---------- Helfer ----------
+const kl = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x))
+const sanft = (x) => { x = kl(x); return x * x * (3 - 2 * x) }
+const lin = (a, b, f) => a + (b - a) * f
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+function text(x, y, s, o = {}) {
+  const { size = 28, fam = 'IN', w = 400, fill = TEXT, anchor = 'start', op = 1, ls = 0 } = o
+  return `<text x="${x}" y="${y}" font-family="${fam}" font-size="${size}" font-weight="${w}" fill="${fill}" text-anchor="${anchor}" opacity="${op}" letter-spacing="${ls}">${esc(s)}</text>`
+}
+const zeilen = (x, y, arr, o, abstand) => arr.map((s, i) => text(x, y + i * abstand, s, o)).join('')
+
+// ---------- Figur (wie in der App) ----------
+const STEHEN = { fuss: [50, 92], knie: [50, 72], huefte: [50, 52], schulter: [50, 30], kopf: [50, 17], ellbogen: [50, 42], hand: [51, 53], zeh: [59, 93] }
+const HOCKE = { fuss: [50, 92], knie: [65, 77], huefte: [38, 68], schulter: [52, 45], kopf: [57, 33], ellbogen: [63, 47], hand: [76, 46], zeh: [59, 93] }
+const HOCKE_SCHIEF = { ...HOCKE, schulter: [61, 52], kopf: [69, 44], ellbogen: [70, 58], hand: [82, 58] }
+const mische = (a, b, f) => Object.fromEntries(Object.keys(a).map((k) => [k, [lin(a[k][0], b[k][0], f), lin(a[k][1], b[k][1], f)]]))
+const vs = (q, dx, dy) => [q[0] + dx, q[1] + dy]
+function kapsel(a, b, ra, rb) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 0.001, nx = -dy / l, ny = dx / l
+  const f = (n) => n.toFixed(2)
+  const k = (q, r) => `M ${f(q[0] - r)} ${f(q[1])} a ${r} ${r} 0 1 0 ${f(2 * r)} 0 a ${r} ${r} 0 1 0 ${f(-2 * r)} 0 Z`
+  return `<path d="M ${f(a[0] + nx * ra)} ${f(a[1] + ny * ra)} L ${f(b[0] + nx * rb)} ${f(b[1] + ny * rb)} L ${f(b[0] - nx * rb)} ${f(b[1] - ny * rb)} L ${f(a[0] - nx * ra)} ${f(a[1] - ny * ra)} Z ${k(a, ra)} ${k(b, rb)}" FILL/>`
+}
+const kap = (a, b, ra, rb, fill, extra = '') => kapsel(a, b, ra, rb).replace('FILL', `fill="${fill}" ${extra}`)
+function auf(a, b, t, s = 0) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 0.001
+  return [a[0] + dx * t - (dy / l) * s, a[1] + dy * t + (dx / l) * s]
+}
+function mensch(p, muskeln = ['oberschenkel', 'gesaess']) {
+  const haut = 'url(#haut)', hinten = 'url(#hinten)', mu = 'url(#muskel)'
+  const an = (m) => muskeln.includes(m)
+  const h = (q) => vs(q, 2.6, -1.2)
+  const bein = (q, fill, vorn) => kap(q.huefte, q.knie, 6.4, 4.6, fill) + kap(q.knie, q.fuss, 4.5, 2.9, fill) + kap(q.fuss, q.zeh, 2.9, 1.9, fill) +
+    (vorn && an('oberschenkel') ? kap(auf(q.huefte, q.knie, 0.18, 1.2), auf(q.huefte, q.knie, 0.86, 1), 4.6, 3.1, mu) : '') +
+    (vorn ? kap(auf(q.knie, q.fuss, 0.15, -1.3), auf(q.knie, q.fuss, 0.55, -0.9), 3.2, 2.1, an('oberschenkel') ? mu : 'rgba(0,0,0,0.05)', an('oberschenkel') ? 'opacity="0.55"' : '') : '')
+  const arm = (q, fill) => kap(q.schulter, q.ellbogen, 4.2, 3.2, fill) + kap(q.ellbogen, q.hand, 3.1, 2.2, fill) + `<circle cx="${q.hand[0]}" cy="${q.hand[1]}" r="2.5" fill="${fill}"/>`
+  const hp = { ...p, huefte: h(p.huefte), knie: h(p.knie), fuss: h(p.fuss), zeh: h(p.zeh), schulter: h(p.schulter), ellbogen: h(p.ellbogen), hand: h(p.hand) }
+  const brust = auf(p.huefte, p.schulter, 0.72, -2.2), bauch = auf(p.huefte, p.schulter, 0.32, -1.6), nacken = auf(p.schulter, p.kopf, 0.45)
+  const ges = auf(p.huefte, p.schulter, 0.05, 2.8)
+  return `<g filter="url(#tiefe)">` + bein(hp, hinten, false) + arm(hp, hinten) +
+    kap(p.huefte, brust, 7.4, 8.4, haut) + kap(nacken, p.schulter, 2.6, 4, haut) +
+    (an('gesaess') ? `<circle cx="${ges[0]}" cy="${ges[1]}" r="5.2" fill="${mu}"/>` : '') +
+    kap(bauch, brust, 2.2, 3, 'rgba(0,0,0,0.045)') +
+    bein(p, haut, true) + `<circle cx="${p.kopf[0]}" cy="${p.kopf[1]}" r="6.6" fill="${haut}"/>` + arm(p, haut) + `</g>`
+}
+const DEFS = `<defs>
+  <linearGradient id="haut" gradientUnits="userSpaceOnUse" x1="20" y1="5" x2="85" y2="95"><stop offset="0" stop-color="#f7f4f0"/><stop offset="0.5" stop-color="#d6d0c7"/><stop offset="1" stop-color="#a49b8f"/></linearGradient>
+  <linearGradient id="hinten" gradientUnits="userSpaceOnUse" x1="20" y1="5" x2="85" y2="95"><stop offset="0" stop-color="#c9c2b8"/><stop offset="1" stop-color="#8c8378"/></linearGradient>
+  <linearGradient id="muskel" gradientUnits="userSpaceOnUse" x1="25" y1="10" x2="80" y2="95"><stop offset="0" stop-color="#f06a4a"/><stop offset="1" stop-color="#b8321d"/></linearGradient>
+  <filter id="tiefe" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0.6" dy="0.9" stdDeviation="0.7" flood-color="#5a4a38" flood-opacity="0.35"/></filter>
+  <filter id="karte" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#261e14" flood-opacity="0.10"/></filter>
+  <filter id="telefon" x="-15%" y="-10%" width="130%" height="125%"><feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#261e14" flood-opacity="0.22"/></filter>
+  <linearGradient id="kamera" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a423a"/><stop offset="1" stop-color="#211d1a"/></linearGradient>
+  <radialGradient id="schatten"><stop offset="0" stop-color="rgba(60,45,30,0.30)"/><stop offset="1" stop-color="rgba(60,45,30,0)"/></radialGradient>
+</defs>`
+const figur = (p, x, y, s, muskeln) => `<g transform="translate(${x} ${y}) scale(${s})"><ellipse cx="${(p.fuss[0] + p.zeh[0]) / 2}" cy="95" rx="20" ry="3" fill="url(#schatten)"/>${mensch(p, muskeln)}</g>`
+
+function winkel(a, b, c) {
+  const v1 = [a[0] - b[0], a[1] - b[1]], v2 = [c[0] - b[0], c[1] - b[1]]
+  return Math.acos((v1[0] * v2[0] + v1[1] * v2[1]) / (Math.hypot(...v1) * Math.hypot(...v2))) * 180 / Math.PI
+}
+/** Skelett wie im Livebild der App */
+function skelett(p, x, y, s, fehler = false) {
+  const q = (k) => [x + p[k][0] * s, y + p[k][1] * s]
+  const linie = (a, b, c, w) => `<line x1="${q(a)[0]}" y1="${q(a)[1]}" x2="${q(b)[0]}" y2="${q(b)[1]}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`
+  let o = ''
+  for (const [a, b] of [['schulter', 'ellbogen'], ['ellbogen', 'hand'], ['schulter', 'huefte'], ['fuss', 'zeh']]) o += linie(a, b, 'rgba(255,255,255,0.6)', 3)
+  o += linie('huefte', 'knie', ORANGE, 6) + linie('knie', 'fuss', ORANGE, 6)
+  if (fehler) o += linie('huefte', 'schulter', '#f87171', 6)
+  for (const k of ['schulter', 'ellbogen', 'hand', 'huefte', 'knie', 'fuss']) o += `<circle cx="${q(k)[0]}" cy="${q(k)[1]}" r="5" fill="#fff"/>`
+  const w = Math.round(winkel(p.huefte, p.knie, p.fuss))
+  const [kx, ky] = q('knie')
+  o += `<rect x="${kx + 14}" y="${ky - 17}" width="112" height="34" rx="9" fill="rgba(18,18,18,0.82)"/>` + text(kx + 24, ky + 7, `Knie ${w}°`, { size: 20, w: 600, fill: '#fff' })
+  if (fehler) {
+    const [sx, sy] = q('schulter')
+    o += `<rect x="${sx - 150}" y="${sy - 52}" width="138" height="34" rx="9" fill="rgba(248,113,113,0.95)"/>` + text(sx - 140, sy - 28, 'Rumpf 62°', { size: 20, w: 600, fill: '#1a1a1a' })
+  }
+  return o
+}
+
+// ---------- Bausteine ----------
+function kopfzeile(nr, titel, unter, op) {
+  return `<g opacity="${op}">` +
+    (nr ? `<circle cx="84" cy="118" r="26" fill="${ORANGE}"/>` + text(84, 128, String(nr), { size: 28, w: 700, anchor: 'middle' }) + text(124, 128, 'SCHRITT ' + nr + ' VON 6', { size: 20, w: 600, fill: ORANGE_T, ls: 3 }) : '') +
+    zeilen(58, 214, titel, { size: 54, fam: 'PF' }, 62) +
+    zeilen(60, 214 + titel.length * 62 + 4, unter, { size: 27, fill: MUTED }, 38) + `</g>`
+}
+const TEL = { x: 150, y: 470, w: 420, h: 790 }
+function telefon(inhalt, op = 1, dy = 0) {
+  const { x, y, w, h } = TEL
+  return `<g opacity="${op}" transform="translate(0 ${dy})" filter="url(#telefon)"><rect x="${x}" y="${y}" width="${w}" height="${h + 80}" rx="58" fill="#161412"/>` +
+    `<rect x="${x + 12}" y="${y + 12}" width="${w - 24}" height="${h + 56}" rx="47" fill="#f7f5f1"/>` +
+    `<rect x="${x + w / 2 - 56}" y="${y + 24}" width="112" height="28" rx="14" fill="#161412"/>` +
+    `<clipPath id="schirm"><rect x="${x + 12}" y="${y + 12}" width="${w - 24}" height="${h + 56}" rx="47"/></clipPath><g clip-path="url(#schirm)">${inhalt}</g></g>`
+}
+const SX = TEL.x + 12, SY = TEL.y + 12, SW = TEL.w - 24 // Bildschirm
+
+function appKopf(titel) {
+  return `<path d="M ${SX + 34} ${SY + 92} l -10 10 l 10 10" stroke="${ORANGE_T}" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` +
+    text(SX + 58, SY + 110, titel, { size: 24, w: 700 }) + text(SX + SW - 24, SY + 110, 'Ansage an', { size: 16, w: 600, fill: ORANGE_T, anchor: 'end' })
+}
+const KAM = { x: SX + 16, y: SY + 136, w: SW - 32, h: 400 }
+function kamera(p, fehler, licht = false) {
+  const { x, y, w, h } = KAM
+  const s = 3.7, fx = x + w / 2 - 50 * s - 8, fy = y + h - 99 * s
+  return `<clipPath id="kam"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="22"/></clipPath><g clip-path="url(#kam)">` +
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#kamera)"/>` +
+    `<rect x="${x}" y="${y + h - 60}" width="${w}" height="60" fill="rgba(0,0,0,0.25)"/>` +
+    figur(p, fx, fy, s) + skelett(p, fx, fy, s, fehler) + `</g>` +
+    `<circle cx="${x + w - 34}" cy="${y + 34}" r="22" fill="rgba(18,18,18,0.75)"/>` +
+    `<rect x="${x + w - 44}" y="${y + 27}" width="20" height="14" rx="3" fill="none" stroke="#fff" stroke-width="2"/>`
+}
+function ring(cx, cy, rest, gesamt, farbe = ORANGE) {
+  const r = 34, u = 2 * Math.PI * r, a = kl(rest / gesamt)
+  const fertig = rest <= 0
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#ece5da" stroke-width="8"/>` +
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${fertig ? GRUEN : farbe}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${u}" stroke-dashoffset="${u * (1 - a)}" transform="rotate(-90 ${cx} ${cy})"/>` +
+    text(cx, cy + 8, fertig ? '✓' : String(Math.ceil(rest)), { size: 32, fam: 'PF', anchor: 'middle' }) +
+    text(cx, cy + 26, fertig ? 'GEHALTEN' : 'HALTEN', { size: 10, w: 700, fill: MUTED, anchor: 'middle', ls: 1 })
+}
+function zaehler(n, ringTeil = '') {
+  const y = KAM.y + KAM.h + 70
+  return text(SX + 18, y, String(n), { size: 66, w: 700 }) + text(SX + 66, y - 4, 'von 5 · je 10 s halten', { size: 17, fill: MUTED }) + ringTeil
+}
+function reichweite(f, best) {
+  const x = SX + 18, y = KAM.y + KAM.h + 104, w = SW - 36
+  const sk = (v) => x + kl(v / 1.3) * w
+  return text(x, y, 'So weit wie möglich', { size: 14, w: 600, fill: MUTED }) +
+    `<rect x="${x}" y="${y + 10}" width="${w}" height="12" rx="6" fill="#ece5da"/>` +
+    `<rect x="${x}" y="${y + 10}" width="${sk(f) - x}" height="12" rx="6" fill="${ORANGE}"/>` +
+    `<rect x="${sk(0.85) - 1}" y="${y + 5}" width="2" height="22" fill="${TEXT}" opacity="0.5"/>` +
+    (best > 0.05 ? `<circle cx="${sk(best)}" cy="${y + 16}" r="7" fill="${GRUEN}" stroke="#fff" stroke-width="2"/>` : '')
+}
+function meldung(txt, art) {
+  const y = KAM.y + KAM.h + 150, x = SX + 18, w = SW - 36
+  const bg = art === 'fehler' ? 'rgba(220,70,60,0.12)' : art === 'lob' ? 'rgba(120,180,70,0.18)' : '#fff'
+  const fg = art === 'fehler' ? '#b0302a' : art === 'lob' ? GRUEN : MUTED
+  return `<rect x="${x}" y="${y}" width="${w}" height="58" rx="14" fill="${bg}"/>` + text(x + 18, y + 37, txt, { size: art === 'ruhig' ? 17 : 19, w: art === 'ruhig' ? 400 : 600, fill: fg })
+}
+function sprechblase(txt, op) {
+  if (op <= 0) return ''
+  const w = Math.max(170, Math.min(640, txt.length * 12.6 + 96)), x = (W - w) / 2, y = 396
+  return `<g opacity="${op}"><rect x="${x}" y="${y}" width="${w}" height="56" rx="28" fill="${TEXT}"/>` +
+    `<path d="M ${x + 26} ${y + 22} h 7 l 9 -7 v 26 l -9 -7 h -7 z" fill="#fff"/><path d="M ${x + 47} ${y + 21} q 6 7 0 14" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/>` + text(x + 62, y + 36, '„' + txt + '“', { size: 21, w: 600, fill: '#fff' }) + `</g>`
+}
+function tipp(x, y, f) {
+  if (f <= 0 || f >= 1) return ''
+  return `<circle cx="${x}" cy="${y}" r="${lin(14, 46, f)}" fill="${ORANGE}" opacity="${0.45 * (1 - f)}"/><circle cx="${x}" cy="${y}" r="14" fill="${ORANGE}" opacity="${0.7 * (1 - f)}"/>`
+}
+
+// ---------- Szenen ----------
+function szene(id, t, d) {
+  const ein = sanft(t / 0.45)
+  // (Kopfzeile beginnt unter der Fortschrittsleiste)
+  if (id === 'titel') {
+    return `<g opacity="${ein}"><image href="signet.png" x="${W / 2 - 57}" y="${380 - 20 * (1 - ein)}" width="114" height="144"/>` +
+      text(W / 2, 640, 'Kamera-Coaching', { size: 66, fam: 'PF', anchor: 'middle' }) +
+      text(W / 2, 700, 'So funktioniert’s', { size: 40, fam: 'PF', fill: ORANGE_T, anchor: 'middle' }) +
+      text(W / 2, 800, 'Kurz erklärt', { size: 26, fill: MUTED, anchor: 'middle' }) +
+      figur(mische(STEHEN, HOCKE, sanft((t - 0.8) / 1) * (1 - sanft((t - 2.2) / 0.8))), W / 2 - 150, 860, 3) + `</g>`
+  }
+  if (id === 'waehlen') {
+    const karten = [['BEINE', 'Kniebeuge', '5 × · je 10 s halten'], ['RUMPF', 'Unterarmstütz', '30 s halten'], ['SCHULTER', 'Schulterdrücken', '5 × · je 10 s halten']]
+    let inhalt = text(SX + 26, SY + 118, 'Training', { size: 40, fam: 'PF' })
+    const aktiv = t > 2.6 ? 1 : 0
+    karten.forEach(([k, n, f], i) => {
+      const y = SY + 160 + i * 168
+      const hl = i === 0 && t > 2.2
+      inhalt += `<rect x="${SX + 18}" y="${y}" width="${SW - 36}" height="150" rx="22" fill="#fff" filter="url(#karte)" ${hl ? `stroke="${ORANGE}" stroke-width="3"` : ''}/>` +
+        `<rect x="${SX + 28}" y="${y + 10}" width="112" height="130" rx="16" fill="#f1ede7"/>` +
+        `<g transform="translate(${SX + 32} ${y + 18}) scale(1.05)">${mensch(i === 0 ? mische(STEHEN, HOCKE, sanft(t / 1.2)) : i === 1 ? { fuss: [88, 87], knie: [72, 84], huefte: [55, 80], schulter: [31, 74], kopf: [19, 70], ellbogen: [31, 89], hand: [45, 90], zeh: [94, 91] } : { ...STEHEN, ellbogen: [53, 17], hand: [53, 5] }, i === 1 ? ['rumpf'] : i === 2 ? [] : undefined)}</g>` +
+        text(SX + 156, y + 40, k, { size: 14, w: 600, fill: ORANGE_T, ls: 2 }) + text(SX + 156, y + 78, n, { size: 26, fam: 'PF' }) +
+        text(SX + 156, y + 108, f, { size: 15, fill: MUTED }) + text(SX + 156, y + 134, 'Mit Kamera starten', { size: 15, w: 600, fill: ORANGE_T })
+    })
+    inhalt += tipp(SX + SW / 2, SY + 235, (t - 2.2) / 0.7)
+    return kopfzeile(1, ['Übung wählen'], ['Unter „Training“ die Übung antippen.'], ein) + telefon(inhalt, ein, 30 * (1 - ein)) + `<g opacity="${aktiv}"></g>`
+  }
+  if (id === 'aufstellen') {
+    const f = sanft((t - 0.6) / 1.2)
+    const fx = 120, fy = 520, s = 4.2
+    const hx = lin(620, 560, f), hy = 520 + 52 * s - 40
+    const kegel = sanft((t - 1.6) / 0.8)
+    return kopfzeile(2, ['Handy aufstellen'], ['Seitlich, etwa auf Hüfthöhe.', 'Dein ganzer Körper muss im Bild sein.'], ein) +
+      `<g opacity="${ein}"><line x1="60" x2="660" y1="${fy + 95 * s + 6}" y2="${fy + 95 * s + 6}" stroke="rgba(42,38,34,0.2)" stroke-width="3" stroke-linecap="round"/>` +
+      figur(STEHEN, fx, fy, s) +
+      `<polygon points="${hx},${hy} ${fx + 30 * s},${fy + 6 * s} ${fx + 30 * s},${fy + 97 * s}" fill="${ORANGE}" opacity="${0.16 * kegel}"/>` +
+      `<line x1="${hx}" y1="${hy}" x2="${fx + 30 * s}" y2="${fy + 6 * s}" stroke="${ORANGE}" stroke-width="2.5" stroke-dasharray="8 8" opacity="${kegel}"/>` +
+      `<line x1="${hx}" y1="${hy}" x2="${fx + 30 * s}" y2="${fy + 97 * s}" stroke="${ORANGE}" stroke-width="2.5" stroke-dasharray="8 8" opacity="${kegel}"/>` +
+      `<rect x="${hx - 6}" y="${hy - 44}" width="30" height="88" rx="7" fill="#161412"/><circle cx="${hx}" cy="${hy}" r="5" fill="#555"/>` +
+      `<rect x="${hx + 2}" y="${hy + 44}" width="14" height="${fy + 95 * s + 6 - hy - 44}" fill="#8c8378"/>` +
+      `<rect x="${hx - 24}" y="${fy + 95 * s}" width="62" height="6" rx="3" fill="#8c8378"/>` +
+      text(W / 2, 1210, 'Tipp: Ein Trainingspartner kann das Handy auch halten.', { size: 22, fill: MUTED, anchor: 'middle', op: kegel }) + `</g>`
+  }
+  if (id === 'countdown') {
+    const zahl = t < 0.9 ? null : t < 1.6 ? '3' : t < 2.3 ? '2' : t < 3.0 ? '1' : 'Los!'
+    let inhalt = appKopf('Kniebeuge') + kamera(STEHEN, false)
+    inhalt += `<rect x="${SX + 18}" y="${KAM.y + KAM.h + 30}" width="${SW - 36}" height="64" rx="16" fill="${ORANGE}" opacity="${zahl ? 0 : 1}"/>` +
+      text(SX + SW / 2, KAM.y + KAM.h + 71, 'Satz starten', { size: 22, w: 600, anchor: 'middle', op: zahl ? 0 : 1 })
+    if (zahl) {
+      const lokal = zahl === 'Los!' ? t - 3.0 : (t - 0.9) % 0.7
+      inhalt += text(SX + SW / 2, KAM.y + KAM.h + 150, zahl, { size: 120 * lin(1.15, 1, sanft(lokal / 0.25)), fam: 'PF', fill: ORANGE_T, anchor: 'middle' })
+    }
+    inhalt += tipp(SX + SW / 2, KAM.y + KAM.h + 62, (t - 0.4) / 0.6)
+    return kopfzeile(3, ['Satz starten'], ['Nach dem Countdown zählt die App mit', 'und sagt dir alles an.'], ein) + telefon(inhalt, ein, 30 * (1 - ein)) +
+      sprechblase(zahl === 'Los!' ? 'Los!' : zahl ?? '', zahl ? 1 : 0)
+  }
+  if (id === 'halten') {
+    // runter (0–1,4), halten (1,4–6,4: 10 s im Zeitraffer), lösen (6,4–7,6), stehen
+    const runter = sanft(t / 1.4), hoch = sanft((t - 6.4) / 1.2)
+    const fArr = runter * (1 - hoch)
+    const p = mische(STEHEN, HOCKE, fArr)
+    const haelt = t >= 1.4 && t < 6.4
+    const rest = haelt ? lin(10, 0, (t - 1.4) / 5) : t >= 6.4 ? 0 : 10
+    const n = t > 7.4 ? 1 : 0
+    let inhalt = appKopf('Kniebeuge') + kamera(p, false) +
+      zaehler(n, t >= 1.4 && t < 7.6 ? ring(SX + SW - 58, KAM.y + KAM.h + 46, rest, 10) : '') +
+      reichweite(fArr * 1.08, t > 1.4 ? 1.08 : fArr * 1.08) +
+      meldung(t < 1.4 ? 'Haltung wird geprüft' : t < 6.4 ? 'Halten – noch ein Stück weiter?' : t < 7.6 ? 'Sehr gut. Und langsam lösen.' : '1 Wiederholung geschafft', t < 1.4 ? 'ruhig' : 'lob')
+    const blase = t < 1.4 ? '' : t < 3 ? 'Halten – und wenn es geht, noch ein Stück weiter.' : t < 6.4 ? (rest <= 3.2 ? String(Math.ceil(rest)) : rest <= 5.2 && rest > 4 ? 'Fünf' : '') : t < 7.8 ? 'Sehr gut. Und langsam lösen.' : ''
+    return kopfzeile(4, ['So weit wie möglich,', 'dann 10 s halten'], [], ein) + telefon(inhalt, ein, 30 * (1 - ein)) +
+      sprechblase(blase, blase ? 1 : 0) +
+      (haelt ? text(W - 40, 360, 'Zeitraffer', { size: 18, w: 600, fill: MUTED, anchor: 'end' }) : '')
+  }
+  if (id === 'korrektur') {
+    const f = sanft(t / 0.8)
+    const p = mische(HOCKE, HOCKE_SCHIEF, f)
+    const fehler = t > 0.9
+    const inhalt = appKopf('Kniebeuge') + kamera(p, fehler) + zaehler(2, ring(SX + SW - 58, KAM.y + KAM.h + 46, 6.2, 10, fehler ? ROT : ORANGE)) +
+      reichweite(1.02, 1.08) + meldung(fehler ? 'Oberkörper aufrichten.' : 'Halten', fehler ? 'fehler' : 'lob')
+    return kopfzeile(5, ['Die App korrigiert dich'], ['Rot heißt: kurz nachkorrigieren.', 'Solange pausiert die Halte-Uhr.'], ein) + telefon(inhalt, ein, 30 * (1 - ein)) +
+      sprechblase(fehler ? 'Oberkörper aufrichten.' : '', fehler ? 1 : 0)
+  }
+  if (id === 'ergebnis') {
+    const k = sanft((t - 0.3) / 0.6)
+    let inhalt = appKopf('Kniebeuge') +
+      `<g opacity="${k}" transform="translate(0 ${20 * (1 - k)})"><rect x="${SX + 18}" y="${SY + 150}" width="${SW - 36}" height="250" rx="22" fill="#fff" filter="url(#karte)"/>` +
+      text(SX + 42, SY + 200, '5 Wiederholungen', { size: 28, fam: 'PF' }) +
+      `<rect x="${SX + 42}" y="${SY + 218}" width="94" height="30" rx="15" fill="rgba(120,180,70,0.2)"/>` + text(SX + 89, SY + 239, '● sauber', { size: 15, w: 600, fill: GRUEN, anchor: 'middle' }) +
+      text(SX + 42, SY + 280, 'Jede Endposition 10 s gehalten.', { size: 18, fill: MUTED }) +
+      text(SX + 42, SY + 308, 'Weiteste Bewegung: Knie 82°', { size: 18, fill: MUTED }) +
+      text(SX + 42, SY + 336, 'Korrektur: 1× Oberkörper aufrichten', { size: 18, fill: MUTED }) +
+      [0, 1, 2, 3, 4].map((i) => `<circle cx="${SX + 50 + i * 26}" cy="${SY + 370}" r="9" fill="${i === 1 ? '#f5c518' : GRUEN}"/>`).join('') + `</g>` +
+      `<rect x="${SX + 18}" y="${SY + 430}" width="${(SW - 46) / 2}" height="64" rx="16" fill="${ORANGE}" opacity="${k}"/>` + text(SX + 18 + (SW - 46) / 4, SY + 471, 'Nächster Satz', { size: 20, w: 600, anchor: 'middle', op: k }) +
+      `<rect x="${SX + 28 + (SW - 46) / 2}" y="${SY + 430}" width="${(SW - 46) / 2}" height="64" rx="16" fill="#ece5da" opacity="${k}"/>` + text(SX + 28 + (SW - 46) * 0.75, SY + 471, 'Fertig', { size: 20, w: 600, anchor: 'middle', op: k })
+    return kopfzeile(6, ['Ergebnis ansehen'], ['Alles landet automatisch', 'in deinem Fortschritt.'], ein) + telefon(inhalt, ein, 30 * (1 - ein))
+  }
+  // ende
+  return `<g opacity="${ein}"><image href="signet.png" x="${W / 2 - 50}" y="390" width="100" height="126"/>` +
+    text(W / 2, 620, 'Jetzt ausprobieren!', { size: 58, fam: 'PF', anchor: 'middle' }) +
+    text(W / 2, 690, 'Training → Übung wählen →', { size: 28, fill: MUTED, anchor: 'middle' }) +
+    text(W / 2, 730, '„Mit Kamera starten“', { size: 28, w: 600, fill: ORANGE_T, anchor: 'middle' }) +
+    `<rect x="${W / 2 - 250}" y="830" width="500" height="92" rx="24" fill="#fff" filter="url(#karte)"/>` +
+    text(W / 2, 870, 'Das Kamerabild bleibt auf deinem Gerät.', { size: 22, w: 600, anchor: 'middle' }) +
+    text(W / 2, 902, 'Gespeichert werden nur deine Ergebnisse.', { size: 20, fill: MUTED, anchor: 'middle' }) +
+    text(W / 2, 1150, 'Rückgrat Donaueschingen', { size: 24, fam: 'PF', fill: ORANGE_T, anchor: 'middle' }) + `</g>`
+}
+
+window.render = (t) => {
+  const s = SZENEN.find((x) => t >= x.von && t < x.bis) ?? SZENEN.at(-1)
+  const lokal = t - s.von, d = s.bis - s.von
+  // Ausblenden am Szenenende (außer letzte)
+  const aus = s.id === 'ende' ? 1 - sanft((lokal - (d - 0.5)) / 0.5) : 1 - sanft((lokal - (d - 0.3)) / 0.3)
+  document.getElementById('b').innerHTML =
+    `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${DEFS}<rect width="${W}" height="${H}" fill="#f7f5f1"/>` +
+    `<g opacity="${aus}">${szene(s.id, lokal, d)}</g>` +
+    // Fortschrittsleiste unten
+    `<rect x="60" y="40" width="${W - 120}" height="5" rx="2.5" fill="#ece5da"/><rect x="60" y="40" width="${(W - 120) * t / DAUER}" height="5" rx="2.5" fill="${ORANGE}"/>` +
+    `</svg>`
+}
+window.SZENEN = SZENEN
+window.DAUER = DAUER
+render(0)
+</script></body></html>
