@@ -227,8 +227,12 @@ h1, h2, h3 { margin: 0; }
 
 /* Skala 0–10 */
 .skala { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-.skala button { height: 52px; border-radius: var(--radius); border: 0; color: #fff; font-size: 18px; font-weight: 600; cursor: pointer; }
-.skala button[aria-pressed='true'] { outline: 3px solid var(--text); outline-offset: 2px; font-weight: 800; }
+.skala button { position: relative; height: 52px; border-radius: var(--radius); border: 0; background: var(--surface); box-shadow: 0 0 0 1px var(--line); color: var(--text); font-size: 18px; font-weight: 600; cursor: pointer; overflow: hidden; transition: background 0.15s, color 0.15s, transform 0.1s; }
+.skala button::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--stufe); }
+.skala button:hover { background: var(--surface-2); }
+.skala button:active { transform: scale(0.96); }
+.skala button[aria-checked='true'] { background: var(--stufe); color: var(--stufe-text); box-shadow: 0 4px 14px rgba(38, 30, 20, 0.18); font-weight: 700; transform: scale(1.04); }
+.skala button[aria-checked='true']::after { display: none; }
 
 /* Teambereich: Seitenleiste + Inhalt, auf schmalen Bildschirmen untereinander */
 .team { display: flex; flex-wrap: wrap; min-height: 100dvh; }

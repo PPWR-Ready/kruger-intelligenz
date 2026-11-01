@@ -67,14 +67,23 @@ export function useMitteilung(): [ReactNode, (text: string) => void] {
   return [text ? <div className="mitteilung" role="status">{text}</div> : null, setText]
 }
 
+/** Mischt zwei Hex-Farben linear (t = 0 … 1). */
+function mische([a, b, t]: [string, string, number]): string {
+  const k = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16)
+  return '#' + [0, 1, 2].map((i) => Math.round(k(a, i) + (k(b, i) - k(a, i)) * t).toString(16).padStart(2, '0')).join('')
+}
+
 /** Befindens-Skala 0–10: große Tasten, Farbe von Limette über Gelb zu Rot. */
 export function Skala({ wert, beiWahl }: { wert: number | null; beiWahl: (w: number) => void }) {
-  const farbe = (i: number) => (i <= 3 ? 'var(--success)' : i <= 6 ? 'var(--warning)' : 'var(--critical)')
+  // Weicher Verlauf Grün → Rückgrat-Orange → Rot; Schrift auf der gewählten Taste passend hell/dunkel
+  const farbe = (i: number) => mische(i <= 5 ? ['#5b9a45', '#f2a41c', i / 5] : ['#f2a41c', '#c4402f', (i - 5) / 5])
+  const schrift = (i: number) => (i >= 3 && i <= 7 ? '#1a1a1a' : '#fff')
   return (
     <div className="stapel">
       <div className="skala" role="radiogroup" aria-label="Rückenschmerz von 0 bis 10">
         {Array.from({ length: 11 }, (_, i) => (
-          <button key={i} type="button" role="radio" aria-checked={wert === i} style={{ background: farbe(i) }} onClick={() => beiWahl(i)}
+          <button key={i} type="button" role="radio" aria-checked={wert === i}
+            style={{ '--stufe': farbe(i), '--stufe-text': schrift(i) } as React.CSSProperties} onClick={() => beiWahl(i)}
             aria-label={i === 0 ? '0, kein Schmerz' : i === 10 ? '10, sehr stark' : String(i)}>
             {i}
           </button>
