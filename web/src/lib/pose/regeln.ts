@@ -3,6 +3,7 @@
 // gepflegt. Diese Datei enthält keine Kamera-Logik und ist vollständig testbar.
 
 import { GELENK, type GelenkId } from './geometrie'
+import { istFigurPose, type FigurPose } from './figur'
 
 export type Ansicht = 'seitlich' | 'frontal'
 export type Modus = 'wiederholungen' | 'halten'
@@ -34,6 +35,8 @@ export interface Regeln {
   endhalten_sekunden?: number | null
   ziel_wiederholungen: number | null
   pruefungen: Pruefung[]
+  /** Ausgangs- und Endposition der Figur (Editor-Marionette bzw. vermessenes Foto/Video). */
+  figur?: { start: FigurPose; ende: FigurPose } | null
 }
 
 export const PHASEN: { id: Phase; name: string }[] = [
@@ -118,6 +121,10 @@ export function leseRegeln(roh: unknown): { regeln: Regeln | null; fehler: strin
       endhalten_sekunden: modus === 'wiederholungen' && endhalten ? endhalten : null,
       ziel_wiederholungen: modus === 'wiederholungen' ? zahl(r.ziel_wiederholungen) : null,
       pruefungen,
+      figur: (() => {
+        const f = r.figur as { start?: unknown; ende?: unknown } | null | undefined
+        return f && istFigurPose(f.start) && istFigurPose(f.ende) ? { start: f.start, ende: f.ende } : null
+      })(),
     },
     fehler,
   }

@@ -7,6 +7,7 @@ import { relativ } from '../../lib/zeit'
 import type { InhaltStatus, Uebung } from '../../lib/db'
 import { Ladefehler, Fehler, Laden, useMitteilung, useUngespeichertWarnung, verlassenOk } from '../../components/Bausteine'
 import { Icon } from '../../components/Icon'
+import { Bewegungserfassung } from './Bewegungserfassung'
 import { KameraBuehne, type Bild } from '../../components/KameraBuehne'
 import { GELENK, GELENKE, type GelenkId } from '../../lib/pose/geometrie'
 import { Auswertung, PHASEN, benoetigteGelenke, leereRegeln, leseRegeln, type Modus, type Phase, type Pruefung, type Regeln, type Stand } from '../../lib/pose/regeln'
@@ -211,6 +212,8 @@ export function TeamUebungEditor() {
             <label className="feld"><span>Kurze Beschreibung für Mitglieder</span><textarea value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)} maxLength={500} style={{ minHeight: 80 }} /></label>
           </section>
 
+          <Bewegungserfassung r={r} setR={(f) => { setGeaendert(true); setR(f) }} />
+
           <section className="karte">
             <h2 className="untertitel">Kamera-Regeln</h2>
             <div className="reihe" style={{ flexWrap: 'wrap' }}>
@@ -230,12 +233,12 @@ export function TeamUebungEditor() {
 
             {r.modus === 'wiederholungen' && r.zaehlen && (
               <div className="stapel" style={{ gap: 10 }}>
-                <label className="feld"><span>Gelenk, das die Wiederholungen zählt</span>
-                  <GelenkWahl wert={r.zaehlen.gelenk} beiWahl={(g) => aendere({ zaehlen: { ...r.zaehlen!, gelenk: g } })} />
-                </label>
+                <div className="zaehl-info">
+                  <span className="klein leise">Zählt am Gelenk</span>
+                  <strong>{GELENK[r.zaehlen.gelenk].name}: {r.zaehlen.start}° → {r.zaehlen.umkehr}°</strong>
+                  <span className="klein leise">Einstellen oben bei „Bewegung erfassen“.</span>
+                </div>
                 <div className="reihe" style={{ flexWrap: 'wrap' }}>
-                  <Zahlfeld label="Ausgangswinkel (°)" wert={r.zaehlen.start} beiAenderung={(v) => aendere({ zaehlen: { ...r.zaehlen!, start: v ?? 0 } })} />
-                  <Zahlfeld label="Umkehrwinkel (°)" wert={r.zaehlen.umkehr} beiAenderung={(v) => aendere({ zaehlen: { ...r.zaehlen!, umkehr: v ?? 0 } })} />
                   <Zahlfeld label="Ziel-Wiederholungen" wert={r.ziel_wiederholungen} beiAenderung={(v) => aendere({ ziel_wiederholungen: v })} />
                   <Zahlfeld label="Endposition halten (s)" wert={r.endhalten_sekunden ?? null} beiAenderung={(v) => aendere({ endhalten_sekunden: v })} />
                 </div>

@@ -3,12 +3,16 @@
 // Ablauf: in die Endposition, dort halten, langsam zurück. Abgeleitet aus den Kamera-Regeln.
 import { useEffect, useId, useState } from 'react'
 import type { Regeln } from '../lib/pose/regeln'
+import { STEHEN, type FigurPose as Pose, type XY } from '../lib/pose/figur'
+import type { GelenkId } from '../lib/pose/geometrie'
 
-type XY = [number, number]
-interface Pose { fuss: XY; knie: XY; huefte: XY; schulter: XY; kopf: XY; ellbogen: XY; hand: XY; zeh: XY }
-type Muskel = 'oberschenkel' | 'gesaess' | 'schulter' | 'oberarm' | 'rumpf' | 'ruecken'
+export type Muskel = 'oberschenkel' | 'gesaess' | 'schulter' | 'oberarm' | 'rumpf' | 'ruecken'
 
-const STEHEN: Pose = { fuss: [50, 92], knie: [50, 72], huefte: [50, 52], schulter: [50, 30], kopf: [50, 17], ellbogen: [50, 42], hand: [51, 53], zeh: [59, 93] }
+/** Welche Muskeln bei welchem Hauptgelenk hervorgehoben werden. */
+export const MUSKELN: Record<GelenkId, Muskel[]> = {
+  knie: ['oberschenkel', 'gesaess'], sprunggelenk: ['oberschenkel'], huefte: ['ruecken', 'gesaess'], rumpfneigung: ['ruecken', 'gesaess'],
+  schulter: ['schulter', 'oberarm'], ellbogen: ['oberarm', 'schulter'], koerperlinie: ['rumpf', 'schulter'], kopfhaltung: ['rumpf'],
+}
 
 interface Figur { start: Pose; ende: Pose; muskeln: Muskel[] }
 const FIGUREN: Record<string, Figur> = {
@@ -40,6 +44,11 @@ FIGUREN.kopfhaltung = FIGUREN.koerperlinie
 
 function figurFuer(r: Regeln | null): Figur {
   if (!r) return FIGUREN.knie
+  // Im Editor erfasste Figur (Marionette oder vermessenes Foto/Video) hat Vorrang
+  if (r.figur) {
+    const g: GelenkId = r.modus === 'halten' ? (r.pruefungen[0]?.gelenk ?? 'koerperlinie') : (r.zaehlen?.gelenk ?? 'knie')
+    return { start: r.modus === 'halten' ? r.figur.ende : r.figur.start, ende: r.figur.ende, muskeln: MUSKELN[g] }
+  }
   if (r.modus === 'halten') return FIGUREN[r.pruefungen[0]?.gelenk ?? 'koerperlinie'] ?? FIGUREN.koerperlinie
   return FIGUREN[r.zaehlen?.gelenk ?? 'knie'] ?? FIGUREN.knie
 }
@@ -75,7 +84,7 @@ function auf(a: XY, b: XY, t: number, seite = 0): XY {
   return [a[0] + dx * t - (dy / l) * seite, a[1] + dy * t + (dx / l) * seite]
 }
 
-function Mensch({ p, muskeln, id }: { p: Pose; muskeln: Muskel[]; id: string }) {
+export function Mensch({ p, muskeln, id }: { p: Pose; muskeln: Muskel[]; id: string }) {
   const haut = `url(#${id}-haut)`, hautHinten = `url(#${id}-hinten)`, muskel = `url(#${id}-muskel)`
   const an = (m: Muskel) => muskeln.includes(m)
   // Hinteres Bein und hinterer Arm leicht versetzt und dunkler
@@ -148,30 +157,37 @@ export function UebungsBild({ regeln, groesse = 104 }: { regeln: Regeln | null; 
 
   return (
     <svg viewBox={ausschnitt(start, ende)} width={groesse} height={groesse} className="uebungs-bild" aria-hidden="true">
-      <defs>
-        <linearGradient id={`${id}-haut`} gradientUnits="userSpaceOnUse" x1="20" y1="5" x2="85" y2="95">
-          <stop offset="0" stopColor="#f7f4f0" />
-          <stop offset="0.5" stopColor="#d6d0c7" />
-          <stop offset="1" stopColor="#a49b8f" />
-        </linearGradient>
-        <linearGradient id={`${id}-hinten`} gradientUnits="userSpaceOnUse" x1="20" y1="5" x2="85" y2="95">
-          <stop offset="0" stopColor="#c9c2b8" />
-          <stop offset="1" stopColor="#8c8378" />
-        </linearGradient>
-        <linearGradient id={`${id}-muskel`} gradientUnits="userSpaceOnUse" x1="25" y1="10" x2="80" y2="95">
-          <stop offset="0" stopColor="#f06a4a" />
-          <stop offset="1" stopColor="#b8321d" />
-        </linearGradient>
-        <filter id={`${id}-tiefe`} x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0.6" dy="0.9" stdDeviation="0.7" floodColor="#5a4a38" floodOpacity="0.35" />
-        </filter>
-        <radialGradient id={`${id}-schatten`}>
-          <stop offset="0" stopColor="rgba(60,45,30,0.28)" />
-          <stop offset="1" stopColor="rgba(60,45,30,0)" />
-        </radialGradient>
-      </defs>
+      <FigurDefs id={id} />
       <ellipse cx={(p.fuss[0] + p.zeh[0]) / 2 + (start === ende ? -12 : 0)} cy={boden} rx={start === ende ? 40 : 18} ry={3.2} fill={`url(#${id}-schatten)`} />
       <g filter={`url(#${id}-tiefe)`}><Mensch p={p} muskeln={muskeln} id={id} /></g>
     </svg>
+  )
+}
+
+/** Farbverläufe und Schatten für <Mensch>; einmal je SVG einbinden. */
+export function FigurDefs({ id }: { id: string }) {
+  return (
+    <defs>
+      <linearGradient id={`${id}-haut`} gradientUnits="userSpaceOnUse" x1="20" y1="5" x2="85" y2="95">
+        <stop offset="0" stopColor="#f7f4f0" />
+        <stop offset="0.5" stopColor="#d6d0c7" />
+        <stop offset="1" stopColor="#a49b8f" />
+      </linearGradient>
+      <linearGradient id={`${id}-hinten`} gradientUnits="userSpaceOnUse" x1="20" y1="5" x2="85" y2="95">
+        <stop offset="0" stopColor="#c9c2b8" />
+        <stop offset="1" stopColor="#8c8378" />
+      </linearGradient>
+      <linearGradient id={`${id}-muskel`} gradientUnits="userSpaceOnUse" x1="25" y1="10" x2="80" y2="95">
+        <stop offset="0" stopColor="#f06a4a" />
+        <stop offset="1" stopColor="#b8321d" />
+      </linearGradient>
+      <filter id={`${id}-tiefe`} x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0.6" dy="0.9" stdDeviation="0.7" floodColor="#5a4a38" floodOpacity="0.35" />
+      </filter>
+      <radialGradient id={`${id}-schatten`}>
+        <stop offset="0" stopColor="rgba(60,45,30,0.28)" />
+        <stop offset="1" stopColor="rgba(60,45,30,0)" />
+      </radialGradient>
+    </defs>
   )
 }
