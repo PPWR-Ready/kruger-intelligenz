@@ -33,7 +33,7 @@ export function Trainieren() {
             const fakten = regeln ? [
               regeln.modus === 'halten' ? `${regeln.halten_sekunden} s halten` : `${regeln.ziel_wiederholungen ?? 10} ×`,
               ...(regeln.endhalten_sekunden ? [`je ${regeln.endhalten_sekunden} s halten`] : []),
-              regeln.ansicht === 'seitlich' ? 'Handy seitlich' : 'Handy frontal',
+              regeln.ansicht === 'seitlich' ? 'Handy seitlich' : 'Handy von vorn',
             ] : []
             const inhalt = (
               <>

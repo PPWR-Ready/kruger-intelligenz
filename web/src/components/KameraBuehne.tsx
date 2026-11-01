@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PoseLandmarker } from '@mediapipe/tasks-vision'
 import { erkenne, erkennungLaden, kameraStarten, kameraStoppen, lichtMoeglich, lichtSchalten, type Kamera } from '../lib/pose/erkennung'
-import { GELENK, Glaetter, besteSeite, gelenkPunkte, gelenkScheitel, gelenkwinkel, type GelenkId, type Punkt, type Seite } from '../lib/pose/geometrie'
+import { GELENK, Glaetter, besteSeite, gelenkLinien, gelenkScheitel, gelenkwinkel, type GelenkId, type Punkt, type Seite } from '../lib/pose/geometrie'
 import { Icon } from './Icon'
 import { ausrichtung as berechneAusrichtung, type Ausrichtung } from '../lib/pose/ausrichtung'
 
@@ -234,14 +234,15 @@ function zeichne(
 
   // Ausgewertete Gelenke hervorheben
   for (const g of gelenke) {
-    const pk = gelenkPunkte(g, seite)
-    if (!pk.every(sichtbar)) continue
     const rot = fehler.includes(g)
     ctx.strokeStyle = rot ? '#f87171' : '#f2a41c'
     ctx.lineWidth = 6 * s
-    ctx.beginPath()
-    pk.forEach((i, n) => (n === 0 ? ctx.moveTo(...xy(i)) : ctx.lineTo(...xy(i))))
-    ctx.stroke()
+    for (const pk of gelenkLinien(g, seite)) {
+      if (!pk.every(sichtbar)) continue
+      ctx.beginPath()
+      pk.forEach((i, n) => (n === 0 ? ctx.moveTo(...xy(i)) : ctx.lineTo(...xy(i))))
+      ctx.stroke()
+    }
   }
 
   // Gelenkpunkte

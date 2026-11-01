@@ -9,8 +9,8 @@ import { Ladefehler, Fehler, Laden, useMitteilung, useUngespeichertWarnung, verl
 import { Icon } from '../../components/Icon'
 import { Bewegungserfassung } from './Bewegungserfassung'
 import { KameraBuehne, type Bild } from '../../components/KameraBuehne'
-import { GELENK, GELENKE, type GelenkId } from '../../lib/pose/geometrie'
-import { Auswertung, PHASEN, benoetigteGelenke, leereRegeln, leseRegeln, type Modus, type Phase, type Pruefung, type Regeln, type Stand } from '../../lib/pose/regeln'
+import { GELENK, gelenkeFuer, type GelenkId } from '../../lib/pose/geometrie'
+import { Auswertung, PHASEN, STANDARD_ZAEHLEN, benoetigteGelenke, leereRegeln, leseRegeln, type Modus, type Phase, type Pruefung, type Regeln, type Stand } from '../../lib/pose/regeln'
 import { useTeam } from './Layout'
 
 const STATUS: Record<InhaltStatus, { text: string; klasse: string }> = {
@@ -130,7 +130,11 @@ export function TeamUebungEditor() {
 
   function modusWechseln(m: Modus) {
     const basis = leereRegeln(m)
-    setR((x) => ({ ...basis, ansicht: x.ansicht, pruefungen: x.pruefungen.map((p) => (m === 'halten' ? { ...p, wann: 'immer' } : p)) }))
+    setR((x) => ({
+      ...basis, ansicht: x.ansicht, figur: x.figur, figur_vorn: x.figur_vorn,
+      zaehlen: m === 'wiederholungen' ? { ...STANDARD_ZAEHLEN[x.ansicht] } : null,
+      pruefungen: x.pruefungen.map((p) => (m === 'halten' ? { ...p, wann: 'immer' } : p)),
+    }))
   }
   const aendere = (teil: Partial<Regeln>) => setR((x) => ({ ...x, ...teil }))
   const aenderePruefung = (pid: string, teil: Partial<Pruefung>) =>
@@ -223,12 +227,6 @@ export function TeamUebungEditor() {
                   <option value="halten">Position halten</option>
                 </select>
               </label>
-              <label className="feld" style={{ flex: 1 }}><span>Kamera steht</span>
-                <select value={r.ansicht} onChange={(e) => aendere({ ansicht: e.target.value as Regeln['ansicht'] })}>
-                  <option value="seitlich">seitlich oder schräg (empfohlen)</option>
-                  <option value="frontal">von vorn</option>
-                </select>
-              </label>
             </div>
 
             {r.modus === 'wiederholungen' && r.zaehlen && (
@@ -253,7 +251,7 @@ export function TeamUebungEditor() {
           <section className="karte">
             <div className="reihe zwischen">
               <h2 className="untertitel">Fehlermeldungen</h2>
-              <button type="button" className="knopf klein" onClick={() => aendere({ pruefungen: [...r.pruefungen, { id: neueId(), gelenk: 'rumpfneigung', min: null, max: null, wann: 'immer', meldung: '' }] })}>
+              <button type="button" className="knopf klein" onClick={() => aendere({ pruefungen: [...r.pruefungen, { id: neueId(), gelenk: r.ansicht === 'frontal' ? 'seitneigung' : 'rumpfneigung', min: null, max: null, wann: 'immer', meldung: '' }] })}>
                 <Icon name="plus" groesse={16} />Prüfung
               </button>
             </div>
@@ -262,7 +260,7 @@ export function TeamUebungEditor() {
             {r.pruefungen.map((p, i) => (
               <div key={p.id} className="stapel" style={{ gap: 8, borderTop: i ? '1px solid var(--line-soft)' : undefined, paddingTop: i ? 12 : 0 }}>
                 <div className="reihe" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <label className="feld" style={{ flex: '1 1 140px' }}><span>Gelenk</span><GelenkWahl wert={p.gelenk} beiWahl={(g) => aenderePruefung(p.id, { gelenk: g })} /></label>
+                  <label className="feld" style={{ flex: '1 1 140px' }}><span>Gelenk</span><GelenkWahl ansicht={r.ansicht} wert={p.gelenk} beiWahl={(g) => aenderePruefung(p.id, { gelenk: g })} /></label>
                   <Zahlfeld label="min °" wert={p.min} beiAenderung={(v) => aenderePruefung(p.id, { min: v })} schmal />
                   <Zahlfeld label="max °" wert={p.max} beiAenderung={(v) => aenderePruefung(p.id, { max: v })} schmal />
                   {r.modus === 'wiederholungen' && (
@@ -313,10 +311,12 @@ export function TeamUebungEditor() {
   )
 }
 
-function GelenkWahl({ wert, beiWahl }: { wert: GelenkId; beiWahl: (g: GelenkId) => void }) {
+function GelenkWahl({ ansicht, wert, beiWahl }: { ansicht: Regeln['ansicht']; wert: GelenkId; beiWahl: (g: GelenkId) => void }) {
+  const liste = gelenkeFuer(ansicht)
   return (
     <select value={wert} onChange={(e) => beiWahl(e.target.value as GelenkId)}>
-      {GELENKE.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+      {!liste.some((g) => g.id === wert) && <option value={wert}>{GELENK[wert].name}</option>}
+      {liste.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
     </select>
   )
 }
@@ -362,7 +362,8 @@ function Messmodus({ regeln, zaehlGelenk, uebernehmen, beenden }: {
     }
   }, [])
 
-  const anzeige = regeln ? benoetigteGelenke(regeln) : GELENKE.map((g) => g.id)
+  const liste = gelenkeFuer(regeln?.ansicht ?? 'seitlich')
+  const anzeige = regeln ? benoetigteGelenke(regeln) : liste.map((g) => g.id)
   const aktuell = zaehlGelenk && winkel?.[zaehlGelenk] != null ? Math.round(winkel[zaehlGelenk] as number) : null
 
   return (
@@ -383,7 +384,7 @@ function Messmodus({ regeln, zaehlGelenk, uebernehmen, beenden }: {
         </div>
       )}
       <div className="winkel-tabelle" aria-live="off">
-        {GELENKE.map((g) => (
+        {liste.map((g) => (
           <div key={g.id} title={g.erklaerung}>
             <span className="klein leise">{g.name}</span>
             <b>{winkel?.[g.id] != null ? `${Math.round(winkel[g.id] as number)}°` : '–'}</b>

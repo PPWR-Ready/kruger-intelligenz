@@ -1,49 +1,115 @@
 // Übung visuell erfassen: Ausgangs- und Endposition entweder aus einem Foto/Video
 // vermessen oder an einer Figur (Marionette) einstellen. Die Winkel werden live in
 // die Kamera-Regeln übernommen und lassen sich mit Schiebereglern anpassen.
-import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
-import { FigurDefs, MUSKELN, Mensch } from '../../components/UebungsBild'
+// Zwei Ansichten: von der Seite (Bewegung nach vorn/hinten) und von vorn (Bewegung zur Seite).
+import { useEffect, useId, useMemo, useRef, useState, type ComponentType, type PointerEvent as RPointerEvent } from 'react'
+import { FigurDefs, MUSKELN, Mensch, MenschVorn, type Muskel } from '../../components/UebungsBild'
 import { Icon } from '../../components/Icon'
-import { ANKER, STEHEN, VORLAGEN, ausKoerperpunkten, ausWeltpunkten, bildBezug, seitlichkeit, figurWinkel, setzeWinkel, zieheAnker, type Anker, type FigurPose, type XY } from '../../lib/pose/figur'
-import { GELENK, GELENKE, besteSeite, gelenkwinkel, type GelenkId, type Punkt, type Seite } from '../../lib/pose/geometrie'
+import { ANKER, STEHEN, VORLAGEN, ausKoerperpunkten, ausWeltpunkten, bildBezug, figurWinkel, setzeWinkel, zieheAnker, type FigurPose, type XY } from '../../lib/pose/figur'
+import { VORN_ALLE, VORN_ANKER, VORN_GLIEDER, VORN_STEHEN, VORN_VORLAGEN, setzeVornWinkel, vornAusErkennung, vornWinkel, zieheVornAnker, type VornPose } from '../../lib/pose/figurVorn'
+import { GELENK, besteSeite, gelenkeFuer, gelenkwinkel, seitenAnteil, type GelenkId, type Punkt, type Seite } from '../../lib/pose/geometrie'
 import { erkenneBild } from '../../lib/pose/erkennung'
-import type { Pruefung, Regeln } from '../../lib/pose/regeln'
+import { STANDARD_ZAEHLEN, ansichtWechseln, type Ansicht, type Pruefung, type Regeln } from '../../lib/pose/regeln'
 
 type Phase = 'start' | 'ende'
+type Pose = Record<string, XY>
 const TOLERANZ = 15
-const ZAEHLBAR: GelenkId[] = ['knie', 'huefte', 'ellbogen', 'schulter', 'sprunggelenk', 'koerperlinie', 'rumpfneigung']
 const MELDUNG: Record<GelenkId, string> = {
   knie: 'Knie-Beugung anpassen.', huefte: 'Hüfte so beugen wie gezeigt.', ellbogen: 'Arm-Haltung anpassen.', schulter: 'Arm-Position anpassen.',
   sprunggelenk: 'Fuß-Position anpassen.', koerperlinie: 'Körper gerade halten.', rumpfneigung: 'Oberkörper-Neigung korrigieren.', kopfhaltung: 'Kopf in Verlängerung der Wirbelsäule.',
+  seitneigung: 'Seitneigung des Oberkörpers anpassen.', arme_seitlich: 'Arme so hoch wie gezeigt.', ellbogen_beide: 'Arm-Haltung anpassen.',
+  beine_gespreizt: 'Beinstellung anpassen.', kopf_seitlich: 'Kopf gerade halten.',
 }
 const AUTO = 'auto-'
 const rund = (v: number | null | undefined) => (v == null ? null : Math.round(v))
 const kl = (v: number) => Math.max(0, Math.min(180, Math.round(v)))
 
+/** Alles, was sich zwischen Seitenansicht und Ansicht von vorn unterscheidet. */
+interface Modell {
+  ansicht: Ansicht
+  standard: Pose
+  winkel: (p: Pose) => Record<GelenkId, number | null>
+  setze: (p: Pose, g: GelenkId, v: number) => Pose
+  ziehe: (p: Pose, a: string, q: XY) => Pose
+  /** Ziehbare Punkte. */
+  anker: { id: string; name: string }[]
+  /** Alle Punkte (auch feste) und Knochen zum Zeichnen. */
+  alle: string[]
+  glieder: [string, string][]
+  wurzel: string | null
+  vorlagen: { name: string; pose: Pose }[]
+  Figur: ComponentType<{ p: Pose; muskeln: Muskel[]; id: string }>
+  hinweis: string
+  zaehlbar: GelenkId[]
+  /** Zählt bevorzugt, sobald es sich mindestens 15° bewegt (Hauptbewegung der Übung). */
+  vorrang: GelenkId | null
+}
+
+/** Welches Gelenk die Wiederholung zählt: Vorrang-Gelenk, sonst das mit der größten Bewegung. */
+function hauptGelenk(m: Modell, spanne: (g: GelenkId) => number | null): GelenkId | null {
+  if (m.vorrang && (spanne(m.vorrang) ?? 0) >= 15) return m.vorrang
+  let best: GelenkId | null = null, groesste = -1
+  for (const g of m.zaehlbar) { const d = spanne(g); if (d !== null && d > groesste) { groesste = d; best = g } }
+  return best
+}
+
+const SEITE: Modell = {
+  ansicht: 'seitlich',
+  standard: STEHEN as unknown as Pose,
+  winkel: (p) => figurWinkel(p as unknown as FigurPose),
+  setze: (p, g, v) => setzeWinkel(p as unknown as FigurPose, g, v) as unknown as Pose,
+  ziehe: (p, a, q) => zieheAnker(p as unknown as FigurPose, a as keyof FigurPose, q) as unknown as Pose,
+  anker: ANKER,
+  alle: ANKER.map((a) => a.id),
+  glieder: [['huefte', 'schulter'], ['schulter', 'kopf'], ['schulter', 'ellbogen'], ['ellbogen', 'hand'], ['huefte', 'knie'], ['knie', 'fuss'], ['fuss', 'zeh']],
+  wurzel: 'huefte',
+  vorlagen: VORLAGEN as unknown as { name: string; pose: Pose }[],
+  Figur: Mensch as unknown as Modell['Figur'],
+  hinweis: 'Punkte ziehen – die Glieder drehen sich wie bei einer Marionette. Die Hüfte (dunkler Punkt) senkt oder hebt den Körper, die Füße bleiben dabei am Boden.',
+  zaehlbar: ['knie', 'huefte', 'ellbogen', 'schulter', 'sprunggelenk', 'koerperlinie', 'rumpfneigung'],
+  vorrang: null,
+}
+
+const VORN: Modell = {
+  ansicht: 'frontal',
+  standard: VORN_STEHEN as unknown as Pose,
+  winkel: (p) => vornWinkel(p as unknown as VornPose),
+  setze: (p, g, v) => setzeVornWinkel(p as unknown as VornPose, g, v) as unknown as Pose,
+  ziehe: (p, a, q) => zieheVornAnker(p as unknown as VornPose, a as keyof VornPose, q) as unknown as Pose,
+  anker: VORN_ANKER,
+  alle: VORN_ALLE,
+  glieder: VORN_GLIEDER,
+  wurzel: null,
+  vorlagen: VORN_VORLAGEN as unknown as { name: string; pose: Pose }[],
+  Figur: MenschVorn as unknown as Modell['Figur'],
+  hinweis: 'Die Figur schaut dich an. Punkte ziehen – eine Schulter neigt den ganzen Oberkörper zur Seite, Ellbogen und Hände bewegen die Arme, Knie und Füße die Beine.',
+  zaehlbar: ['seitneigung', 'arme_seitlich', 'ellbogen_beide', 'beine_gespreizt', 'kopf_seitlich'],
+  vorrang: 'seitneigung',
+}
+const MODELL: Record<Ansicht, Modell> = { seitlich: SEITE, frontal: VORN }
+
 export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regeln) => Regeln) => void }) {
   const halten = r.modus === 'halten'
+  const m = MODELL[r.ansicht]
   const [phase, setPhase] = useState<Phase>(halten ? 'ende' : 'start')
   const [quelle, setQuelle] = useState<'figur' | 'medien'>('figur')
-  const [zaehlFest, setZaehlFest] = useState(!!r.figur || !!r.zaehlen)
-  const posen = useMemo(() => r.figur ?? { start: STEHEN, ende: STEHEN }, [r.figur])
+  // Zählgelenk von Hand gewählt (gilt nur für diese Ansicht)
+  const [festFuer, setFestFuer] = useState<Ansicht | null>((r.ansicht === 'frontal' ? r.figur_vorn : r.figur) || r.zaehlen ? r.ansicht : null)
+  const zaehlFest = festFuer === r.ansicht
+  const gespeichert = (r.ansicht === 'frontal' ? r.figur_vorn : r.figur) as { start: Pose; ende: Pose } | null | undefined
+  const posen = useMemo(() => gespeichert ?? { start: m.standard, ende: m.standard }, [gespeichert, m])
   const aktivePhase: Phase = halten ? 'ende' : phase
-  const gemessen = useMemo(() => ({ start: figurWinkel(posen.start), ende: figurWinkel(posen.ende) }), [posen])
+  const gemessen = useMemo(() => ({ start: m.winkel(posen.start), ende: m.winkel(posen.ende) }), [posen, m])
 
   // Neue Posen übernehmen: Zählwinkel und überwachte Gelenke folgen den Messwerten
-  function posenSetzen(neu: { start: FigurPose; ende: FigurPose }, festhalten = zaehlFest) {
-    const ws = figurWinkel(neu.start), we = figurWinkel(neu.ende)
+  function posenSetzen(neu: { start: Pose; ende: Pose }, festhalten = zaehlFest, modell = m) {
+    const ws = modell.winkel(neu.start), we = modell.winkel(neu.ende)
     setR((x) => {
       let zaehlen = x.zaehlen
       if (x.modus === 'wiederholungen') {
-        let g = zaehlen?.gelenk ?? 'knie'
-        if (!festhalten) {
-          let best = -1
-          for (const id of ZAEHLBAR) {
-            const d = Math.abs((ws[id] ?? 0) - (we[id] ?? 0))
-            if (ws[id] != null && we[id] != null && d > best) { best = d; g = id }
-          }
-        }
-        zaehlen = { gelenk: g, start: kl(ws[g] ?? 170), umkehr: kl(we[g] ?? 100) }
+        let g = zaehlen && GELENK[zaehlen.gelenk].ebene === modell.ansicht ? zaehlen.gelenk : STANDARD_ZAEHLEN[modell.ansicht].gelenk
+        if (!festhalten) g = hauptGelenk(modell, (id) => (ws[id] != null && we[id] != null ? Math.abs((ws[id] as number) - (we[id] as number)) : null)) ?? g
+        zaehlen = { gelenk: g, start: kl(ws[g] ?? STANDARD_ZAEHLEN[modell.ansicht].start), umkehr: kl(we[g] ?? STANDARD_ZAEHLEN[modell.ansicht].umkehr) }
       }
       const pruefungen = x.pruefungen.map((p) => {
         if (!p.id.startsWith(AUTO)) return p
@@ -51,15 +117,16 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
         if (a == null || b == null) return p
         return { ...p, min: kl(Math.min(a, b) - TOLERANZ), max: kl(Math.max(a, b) + TOLERANZ) }
       })
-      return { ...x, figur: neu, zaehlen, pruefungen }
+      const feld = modell.ansicht === 'frontal' ? { figur_vorn: neu as unknown as Regeln['figur_vorn'] } : { figur: neu as unknown as Regeln['figur'] }
+      return { ...x, ...feld, zaehlen, pruefungen }
     })
   }
-  const poseSetzen = (ph: Phase, p: FigurPose, festhalten = zaehlFest) => posenSetzen(halten ? { start: p, ende: p } : { ...posen, [ph]: p }, festhalten)
+  const poseSetzen = (ph: Phase, p: Pose, festhalten = zaehlFest) => posenSetzen(halten ? { start: p, ende: p } : { ...posen, [ph]: p }, festhalten)
   // Schieberegler: Gelenk in der gerade gewählten Position drehen – Figur und Foto-Skelett folgen
-  const winkelSetzen = (g: GelenkId, v: number) => poseSetzen(aktivePhase, setzeWinkel(posen[aktivePhase], g, v), true)
+  const winkelSetzen = (g: GelenkId, v: number) => poseSetzen(aktivePhase, m.setze(posen[aktivePhase], g, v), true)
 
   function zaehlGelenkWaehlen(g: GelenkId) {
-    setZaehlFest(true)
+    setFestFuer(r.ansicht)
     setR((x) => ({ ...x, zaehlen: { gelenk: g, start: kl(gemessen.start[g] ?? 170), umkehr: kl(gemessen.ende[g] ?? 100) }, pruefungen: x.pruefungen.filter((p) => p.id !== AUTO + g) }))
   }
   function ueberwachen(g: GelenkId, an: boolean) {
@@ -74,6 +141,11 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
   const setzeGrenze = (g: GelenkId, feld: 'min' | 'max', v: number) =>
     setR((x) => ({ ...x, pruefungen: x.pruefungen.map((p) => (p.id === AUTO + g ? { ...p, [feld]: v } : p)) }))
 
+  /** Foto zeigt eine andere Ansicht: Übung umstellen und die gemessenen Positionen dort übernehmen. */
+  function ansichtSetzen(a: Ansicht) {
+    setR((x) => ansichtWechseln(x, a))
+  }
+
   return (
     <section className="karte erfassung">
       <div className="stapel" style={{ gap: 4 }}>
@@ -82,6 +154,16 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
           {halten ? 'Zeig die Halteposition' : 'Zeig Ausgangs- und Endposition'} – per Foto oder Video, oder richte die Figur selbst aus. Die Winkel werden sofort eingetragen und lassen sich unten fein einstellen.
         </p>
       </div>
+
+      <div className="segment" role="tablist" aria-label="Kamera sieht die Person">
+        <button type="button" role="tab" aria-selected={r.ansicht === 'seitlich'} onClick={() => ansichtSetzen('seitlich')}>Von der Seite</button>
+        <button type="button" role="tab" aria-selected={r.ansicht === 'frontal'} onClick={() => ansichtSetzen('frontal')}>Von vorn</button>
+      </div>
+      <p className="klein leise" style={{ margin: '-4px 0 0' }}>
+        {r.ansicht === 'frontal'
+          ? 'Für Bewegungen zur Seite – z. B. Seitneigung, Arme oder Beine seitlich. Die Kamera steht vor der Person.'
+          : 'Für Bewegungen nach vorn und hinten – z. B. Beugen, Strecken, Kniebeuge. Die Kamera steht seitlich oder schräg.'}
+      </p>
 
       <div className="segment" role="tablist" aria-label="Erfassen über">
         <button type="button" role="tab" aria-selected={quelle === 'medien'} onClick={() => setQuelle('medien')}><Icon name="kamera" groesse={18} />Foto oder Video</button>
@@ -99,11 +181,14 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
       )}
 
       {quelle === 'medien'
-        ? <MedienVermessung halten={halten} phase={aktivePhase} posen={posen} uebernehmen={(ph, p) => { poseSetzen(ph, p); if (!halten) setPhase(ph === 'start' ? 'ende' : 'start') }} beide={(s, e) => posenSetzen({ start: s, ende: e })} />
-        : <Marionette pose={posen[aktivePhase]} geist={halten ? null : posen[aktivePhase === 'start' ? 'ende' : 'start']} muskelGelenk={r.zaehlen?.gelenk ?? r.pruefungen[0]?.gelenk ?? 'knie'}
+        ? <MedienVermessung modell={m} festgelegt={!!gespeichert} halten={halten} phase={aktivePhase} posen={posen} ansichtSetzen={ansichtSetzen}
+            uebernehmen={(ph, p) => { poseSetzen(ph, p); if (!halten) setPhase(ph === 'start' ? 'ende' : 'start') }}
+            beide={(s, e) => posenSetzen({ start: s, ende: e })} />
+        : <Marionette key={m.ansicht} modell={m} pose={posen[aktivePhase]} geist={halten ? null : posen[aktivePhase === 'start' ? 'ende' : 'start']}
+            muskelGelenk={r.zaehlen?.gelenk ?? r.pruefungen[0]?.gelenk ?? STANDARD_ZAEHLEN[r.ansicht].gelenk}
             aendern={(p) => poseSetzen(aktivePhase, p)} />}
 
-      <WinkelRegler r={r} gemessen={gemessen} halten={halten} phase={aktivePhase} zaehlGelenkWaehlen={zaehlGelenkWaehlen} ueberwachen={ueberwachen} winkelSetzen={winkelSetzen} setzeGrenze={setzeGrenze} />
+      <WinkelRegler r={r} modell={m} gemessen={gemessen} halten={halten} phase={aktivePhase} zaehlGelenkWaehlen={zaehlGelenkWaehlen} ueberwachen={ueberwachen} winkelSetzen={winkelSetzen} setzeGrenze={setzeGrenze} />
     </section>
   )
 }
@@ -112,26 +197,27 @@ export function Bewegungserfassung({ r, setR }: { r: Regeln; setR: (f: (x: Regel
 // Marionette
 // ---------------------------------------------------------------------------
 
-function Marionette({ pose, geist, muskelGelenk, aendern }: { pose: FigurPose; geist: FigurPose | null; muskelGelenk: GelenkId; aendern: (p: FigurPose) => void }) {
+function Marionette({ modell: m, pose, geist, muskelGelenk, aendern }: { modell: Modell; pose: Pose; geist: Pose | null; muskelGelenk: GelenkId; aendern: (p: Pose) => void }) {
   const id = useId().replace(/:/g, '')
   const svg = useRef<SVGSVGElement>(null)
-  const [zieht, setZieht] = useState<Anker | null>(null)
+  const [zieht, setZieht] = useState<string | null>(null)
   const aktuell = useRef(pose)
   useEffect(() => { aktuell.current = pose }, [pose])
 
   function punkt(e: RPointerEvent): XY | null {
     const s = svg.current
-    const m = s?.getScreenCTM()
-    if (!s || !m) return null
-    const q = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse())
+    const mx = s?.getScreenCTM()
+    if (!s || !mx) return null
+    const q = new DOMPoint(e.clientX, e.clientY).matrixTransform(mx.inverse())
     return [q.x, q.y]
   }
   const bewegen = (e: RPointerEvent) => {
     if (!zieht) return
     const q = punkt(e)
-    if (q) { aktuell.current = zieheAnker(aktuell.current, zieht, q); aendern(aktuell.current) }
+    if (q) { aktuell.current = m.ziehe(aktuell.current, zieht, q); aendern(aktuell.current) }
   }
-  const linie = (a: Anker, b: Anker) => <line key={a + b} x1={pose[a][0]} y1={pose[a][1]} x2={pose[b][0]} y2={pose[b][1]} className="mario-knochen" />
+  const Figur = m.Figur
+  const ziehbar = new Set(m.anker.map((a) => a.id))
 
   return (
     <div className="stapel" style={{ gap: 8 }}>
@@ -139,24 +225,25 @@ function Marionette({ pose, geist, muskelGelenk, aendern }: { pose: FigurPose; g
         role="application" aria-label="Figur: Ankerpunkte ziehen, um die Position einzustellen">
         <FigurDefs id={id} />
         <line x1="4" x2="96" y1="96" y2="96" className="mario-boden" />
-        {geist && <g opacity="0.18"><Mensch p={geist} muskeln={[]} id={id} /></g>}
-        <g filter={`url(#${id}-tiefe)`}><Mensch p={pose} muskeln={MUSKELN[muskelGelenk]} id={id} /></g>
-        <g>{[['huefte', 'schulter'], ['schulter', 'kopf'], ['schulter', 'ellbogen'], ['ellbogen', 'hand'], ['huefte', 'knie'], ['knie', 'fuss'], ['fuss', 'zeh']].map(([a, b]) => linie(a as Anker, b as Anker))}</g>
-        {ANKER.map(({ id: a, name }) => (
-          <g key={a} className={`mario-anker${a === 'huefte' ? ' wurzel' : ''}${zieht === a ? ' aktiv' : ''}`}
+        {geist && <g opacity="0.18"><Figur p={geist} muskeln={[]} id={id} /></g>}
+        <g filter={`url(#${id}-tiefe)`}><Figur p={pose} muskeln={MUSKELN[muskelGelenk]} id={id} /></g>
+        <g>{m.glieder.map(([a, b]) => <line key={a + b} x1={pose[a][0]} y1={pose[a][1]} x2={pose[b][0]} y2={pose[b][1]} className="mario-knochen" />)}</g>
+        {m.alle.filter((a) => !ziehbar.has(a)).map((a) => <circle key={a} cx={pose[a][0]} cy={pose[a][1]} r="1.8" className="mario-punkt" />)}
+        {m.anker.map(({ id: a, name }) => (
+          <g key={a} className={`mario-anker${a === m.wurzel ? ' wurzel' : ''}${zieht === a ? ' aktiv' : ''}`}
             onPointerDown={(e) => { (e.target as Element).setPointerCapture?.(e.pointerId); svg.current?.setPointerCapture(e.pointerId); setZieht(a) }}>
             <circle cx={pose[a][0]} cy={pose[a][1]} r="6" className="mario-griff" />
             <circle cx={pose[a][0]} cy={pose[a][1]} r="2.6" className="mario-punkt" />
-            <title>{name}{a === 'huefte' ? ' (Körper heben/senken, Füße bleiben stehen)' : ''}</title>
+            <title>{name}{a === m.wurzel ? ' (Körper heben/senken, Füße bleiben stehen)' : ''}</title>
           </g>
         ))}
       </svg>
       <div className="reihe zwischen klein leise" style={{ flexWrap: 'wrap', gap: 8 }}>
-        <span>Punkte ziehen – die Glieder drehen sich wie bei einer Marionette. Die Hüfte (dunkler Punkt) senkt oder hebt den Körper, die Füße bleiben dabei am Boden.</span>
+        <span>{m.hinweis}</span>
       </div>
       <div className="chips">
         <span className="klein leise" style={{ alignSelf: 'center' }}>Ausgangsfigur:</span>
-        {VORLAGEN.map((v) => <button key={v.name} type="button" className="chip" onClick={() => aendern(v.pose)}>{v.name}</button>)}
+        {m.vorlagen.map((v) => <button key={v.name} type="button" className="chip" onClick={() => aendern(v.pose)}>{v.name}</button>)}
       </div>
     </div>
   )
@@ -166,39 +253,67 @@ function Marionette({ pose, geist, muskelGelenk, aendern }: { pose: FigurPose; g
 // Foto / Video vermessen
 // ---------------------------------------------------------------------------
 
-async function vermesse(el: HTMLVideoElement | HTMLImageElement, breite: number, hoehe: number) {
+/** Ganzes erkanntes Skelett (beide Seiten, ohne Gesicht). */
+const KNOCHEN: [number, number][] = [
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24],
+  [23, 25], [25, 27], [27, 31], [24, 26], [26, 28], [28, 32],
+]
+
+interface Figurmessung { pose: Pose; zuBild: ((q: XY) => XY) | null }
+interface Messung {
+  punkte: Punkt[]; welt: Punkt[] | null; seite: Seite
+  /** 0 = genau von vorn/hinten, 1 = genau seitlich (nur mit 3D), sonst null */
+  anteil: number | null
+  seitlich: Figurmessung | null
+  vorn: Figurmessung | null
+  winkel: Record<GelenkId, number | null>
+}
+
+async function vermesse(el: HTMLVideoElement | HTMLImageElement, breite: number, hoehe: number): Promise<Messung | null> {
   const { punkte, welt } = await erkenneBild(el)
   if (!punkte.length) return null
   return auswerten(punkte, welt, besteSeite(punkte), breite, hoehe)
 }
 
 /**
- * Winkel in 3D (aus jeder Richtung gleich). Die Figur: von der Seite direkt aus dem Bild
- * (dann liegt das Skelett genau auf der Person), sonst aus den 3D-Punkten in die
- * Seitenansicht gedreht.
+ * Winkel in 3D (aus jeder Richtung). Beide Figuren werden berechnet: Ist das Foto aus
+ * der passenden Richtung, liegt das Skelett genau auf der Person (zuBild), sonst kommt
+ * die Figur aus den 3D-Punkten.
  */
-function auswerten(punkte: Punkt[], welt: Punkt[] | null, seite: Seite, breite: number, hoehe: number) {
-  const seitlich = (seitlichkeit(welt) ?? 1) > 0.75
-  const pose = seitlich || !welt ? ausKoerperpunkten(punkte, seite, breite, hoehe) : ausWeltpunkten(welt, seite)
-  return { punkte, welt, seite, seitlich, pose, winkel: gelenkwinkel(punkte, seite, breite, hoehe, welt) }
+function auswerten(punkte: Punkt[], welt: Punkt[] | null, seite: Seite, breite: number, hoehe: number): Messung {
+  const anteil = welt && welt.length >= 33 ? seitenAnteil(welt) : null
+  const vonSeite = anteil === null || anteil > 0.75
+  const seitPose = vonSeite || !welt ? ausKoerperpunkten(punkte, seite, breite, hoehe) : ausWeltpunkten(welt, seite)
+  const seitlich: Figurmessung | null = seitPose
+    ? { pose: seitPose as unknown as Pose, zuBild: vonSeite ? bildBezug(punkte, seite, breite, hoehe) : null }
+    : null
+  const v = vornAusErkennung(punkte, welt, breite, hoehe)
+  const vorn: Figurmessung | null = v ? { pose: v.pose as unknown as Pose, zuBild: v.zuBild } : null
+  return { punkte, welt, seite, anteil, seitlich, vorn, winkel: gelenkwinkel(punkte, seite, breite, hoehe, welt) }
 }
-type Messung = NonNullable<Awaited<ReturnType<typeof vermesse>>>
+const figurAus = (m: Messung | null, a: Ansicht) => (m ? (a === 'frontal' ? m.vorn : m.seitlich) : null)
 
-function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
-  halten: boolean; phase: Phase; posen: { start: FigurPose; ende: FigurPose }
-  uebernehmen: (ph: Phase, p: FigurPose) => void
-  beide: (s: FigurPose, e: FigurPose) => void
+function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehmen, beide, ansichtSetzen }: {
+  /** Positionen dieser Ansicht sind schon erfasst: Ansicht nicht mehr automatisch umstellen. */
+  modell: Modell; festgelegt: boolean; halten: boolean; phase: Phase; posen: { start: Pose; ende: Pose }
+  uebernehmen: (ph: Phase, p: Pose) => void
+  beide: (s: Pose, e: Pose) => void
+  ansichtSetzen: (a: Ansicht) => void
 }) {
+  const ansicht = modell.ansicht
   const [datei, setDatei] = useState<{ url: string; art: 'bild' | 'video' } | null>(null)
   const [messung, setMessung] = useState<Messung | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [zeit, setZeit] = useState(0)
   const [dauer, setDauer] = useState(0)
   /** Für übernommene Positionen: wie Figur-Koordinaten zurück aufs Bild kommen (und zu welchem Video-Zeitpunkt). */
-  const [bezug, setBezug] = useState<Partial<Record<Phase, { zuBild: (q: XY) => XY; zeit: number }>>>({})
+  const [bezug, setBezug] = useState<Partial<Record<Phase, { zuBild: (q: XY) => XY; zeit: number; ansicht: Ansicht }>>>({})
   const bild = useRef<HTMLImageElement>(null)
   const video = useRef<HTMLVideoElement>(null)
   const leinwand = useRef<HTMLCanvasElement>(null)
+  /** Erste Messung einer neuen Datei: Ansicht der Übung ggf. automatisch anpassen. */
+  const neueDatei = useRef(false)
+  const figur = figurAus(messung, ansicht)
 
   useEffect(() => () => { if (datei) URL.revokeObjectURL(datei.url) }, [datei])
 
@@ -209,20 +324,40 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     setMessung(null)
     setBezug({})
     setStatus('Datei wird geladen …')
+    neueDatei.current = true
     setDatei({ url: URL.createObjectURL(f), art: f.type.startsWith('video') ? 'video' : 'bild' })
   }
+
+  const masse = (el: HTMLVideoElement | HTMLImageElement) =>
+    el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : [el.naturalWidth, el.naturalHeight]
 
   async function messen() {
     const el = datei?.art === 'video' ? video.current : bild.current
     if (!el) return
-    const b = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
-    const h = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
+    const [b, h] = masse(el)
     setStatus('Körper wird vermessen … (beim ersten Mal lädt die Erkennung, ca. 25 MB)')
     try {
       const m = await vermesse(el, b, h)
       setMessung(m)
-      setStatus(!m ? 'Keine Person erkannt. Bitte ganzer Körper im Bild und gutes Licht.' : !m.pose ? 'Nicht alle Körperpunkte sind sichtbar – bitte ganzer Körper im Bild.' : !m.seitlich ? 'Von vorn bzw. schräg aufgenommen: Die Winkel werden in 3D gemessen, die Figur oben rechts zeigt die Seitenansicht.' : null)
-      zeichne(m)
+      let a = ansicht, umgestellt = false, abweichend = false
+      if (m && neueDatei.current && m.anteil !== null) {
+        // Aufnahmerichtung erkannt: beim ersten Foto die Übung auf die passende Ansicht stellen
+        const erkannt: Ansicht | null = m.anteil < 0.4 ? 'frontal' : m.anteil > 0.6 ? 'seitlich' : null
+        if (erkannt && erkannt !== ansicht) {
+          if (festgelegt) abweichend = true
+          else { a = erkannt; umgestellt = true; ansichtSetzen(erkannt) }
+        }
+      }
+      if (m) neueDatei.current = false
+      const f = figurAus(m, a)
+      setStatus(!m ? 'Keine Person erkannt. Bitte ganzer Körper im Bild und gutes Licht.'
+        : !f ? 'Nicht alle Körperpunkte sind sichtbar – bitte ganzer Körper im Bild.'
+        : umgestellt ? (a === 'frontal'
+          ? 'Von vorn aufgenommen – die Übung ist jetzt auf „Von vorn“ gestellt. Gemessen werden Bewegungen zur Seite (Seitneigung, Arme, Beine, Kopf).'
+          : 'Von der Seite aufgenommen – die Übung ist jetzt auf „Von der Seite“ gestellt.')
+        : abweichend ? `Dieses Foto ist eher ${a === 'frontal' ? 'von der Seite' : 'von vorn'} aufgenommen. Gemessen wird trotzdem ${a === 'frontal' ? 'von vorn' : 'von der Seite'} – in 3D. Oben lässt sich die Ansicht umstellen.`
+        : !f.zuBild ? 'Schräg aufgenommen: Die Winkel werden in 3D gemessen.'
+        : null)
     } catch (e) {
       console.error('Vermessung fehlgeschlagen', e)
       setStatus(`Die Vermessung hat nicht geklappt. Bitte die Seite neu laden und noch einmal versuchen. (${e instanceof Error ? e.message : String(e)})`)
@@ -237,62 +372,55 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     const ctx = c.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, c.width, c.height)
+    if (!m) return
     const px = devicePixelRatio
-    const glieder: [Anker, Anker][] = [['kopf', 'schulter'], ['schulter', 'ellbogen'], ['ellbogen', 'hand'], ['schulter', 'huefte'], ['huefte', 'knie'], ['knie', 'fuss'], ['fuss', 'zeh']]
-    const skelett = (pos: (a: Anker) => [number, number], farbe: string, breite: number, punkte: boolean) => {
-      ctx.lineCap = 'round'; ctx.lineWidth = breite * px; ctx.strokeStyle = farbe
-      for (const [a, b] of glieder) { ctx.beginPath(); ctx.moveTo(...pos(a)); ctx.lineTo(...pos(b)); ctx.stroke() }
-      if (!punkte) return
-      ctx.fillStyle = '#fff'
-      for (const { id } of ANKER) { ctx.beginPath(); ctx.arc(...pos(id), 5 * px, 0, Math.PI * 2); ctx.fill() }
-    }
-    const IDX: Record<Anker, number> = { kopf: 7, schulter: 11, ellbogen: 13, hand: 15, huefte: 23, knie: 25, fuss: 27, zeh: 31 }
-    const erkannt = m && ((a: Anker): [number, number] => { const q = m.punkte[IDX[a] + (m.seite === 'rechts' ? 1 : 0)]; return [q.x * c.width, q.y * c.height] })
-    // Übernommene Position an dieser Stelle: eingestellte Figur zeigen (folgt den Schiebereglern),
-    // dazu die ursprüngliche Erkennung dünn zum Vergleich
+    ctx.lineCap = 'round'
+    const linie = (a: [number, number], b: [number, number]) => { ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke() }
+    const punkt = (q: [number, number], r: number) => { ctx.beginPath(); ctx.arc(...q, r * px, 0, Math.PI * 2); ctx.fill() }
+    const lmXY = (i: number): [number, number] => [m.punkte[i].x * c.width, m.punkte[i].y * c.height]
+
+    // Übernommene (und evtl. per Regler verstellte) Position, sonst die Messung selbst – als Figur auf dem Bild
     const b = bezug[phase]
-    const passt = b && (datei?.art !== 'video' || Math.abs(b.zeit - (video.current?.currentTime ?? 0)) < 0.08)
-    if (b && passt) {
-      if (erkannt) skelett(erkannt, 'rgba(255,255,255,0.55)', 2, false)
-      skelett((a) => { const [x, y] = b.zuBild(posen[phase][a]); return [x * c.width, y * c.height] }, '#f2a41c', 4, true)
-    } else if (erkannt) {
-      skelett(erkannt, '#f2a41c', 4, true)
+    const passt = b && b.ansicht === ansicht && (datei?.art !== 'video' || Math.abs(b.zeit - (video.current?.currentTime ?? 0)) < 0.08)
+    const f = figurAus(m, ansicht)
+    const figurBild = passt ? { pose: posen[phase], zuBild: b.zuBild } : f?.zuBild ? { pose: f.pose, zuBild: f.zuBild } : null
+
+    // Ganzes erkanntes Skelett: dünn als Vergleich, kräftig wenn keine Figur aufs Bild passt
+    ctx.strokeStyle = figurBild ? 'rgba(255,255,255,0.6)' : '#f2a41c'
+    ctx.lineWidth = (figurBild ? 2 : 4) * px
+    for (const [a, z] of KNOCHEN) linie(lmXY(a), lmXY(z))
+    if (!figurBild) {
+      ctx.fillStyle = '#fff'
+      for (const i of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) punkt(lmXY(i), 4.5)
+      return
     }
-    // Nicht von der Seite aufgenommen: eingestellte Figur als kleine Seitenansicht einblenden
-    if (m && !m.seitlich) {
-      const g = Math.min(c.width, c.height) * 0.38, x0 = c.width - g - 10 * px, y0 = 10 * px
-      ctx.fillStyle = 'rgba(255,255,255,0.88)'
-      ctx.beginPath(); ctx.roundRect(x0, y0, g, g, 12 * px); ctx.fill()
-      ctx.fillStyle = '#8f5208'; ctx.font = `600 ${11 * px}px Inter, sans-serif`
-      ctx.fillText('Seitenansicht (3D)', x0 + 8 * px, y0 + 16 * px)
-      const q = (a: Anker): [number, number] => [x0 + (posen[phase][a][0] / 100) * g, y0 + (posen[phase][a][1] / 100) * g]
-      skelett(q, '#f2a41c', 3, false)
-      ctx.fillStyle = '#2a2622'
-      for (const { id } of ANKER) { ctx.beginPath(); ctx.arc(...q(id), 3 * px, 0, Math.PI * 2); ctx.fill() }
-    }
+    const pos = (a: string): [number, number] => { const [x, y] = figurBild.zuBild(figurBild.pose[a]); return [x * c.width, y * c.height] }
+    ctx.strokeStyle = '#f2a41c'; ctx.lineWidth = 4 * px
+    for (const [a, z] of modell.glieder) linie(pos(a), pos(z))
+    ctx.fillStyle = '#fff'
+    for (const a of modell.alle) punkt(pos(a), 5)
   }
   const zeichneAktuell = useRef(zeichne)
   zeichneAktuell.current = zeichne
-  // Neu zeichnen, wenn sich die Figur (Schieberegler) oder die Position ändert
-  useEffect(() => { zeichneAktuell.current(messung) }, [posen, phase, bezug, messung])
+  // Neu zeichnen, wenn sich die Figur (Schieberegler), die Position oder die Ansicht ändert
+  useEffect(() => { zeichneAktuell.current(messung) }, [posen, phase, bezug, messung, ansicht])
 
-  function merkeBezug(ph: Phase, m: Messung) {
-    const el = datei?.art === 'video' ? video.current : bild.current
-    if (!el) return
-    const b = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
-    const h = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
-    const zuBild = m.seitlich ? bildBezug(m.punkte, m.seite, b, h) : null
-    if (zuBild) setBezug((x) => ({ ...x, [ph]: { zuBild, zeit: video.current?.currentTime ?? 0 } }))
+  function merkeBezug(ph: Phase, f: Figurmessung) {
+    if (f.zuBild) setBezug((x) => ({ ...x, [ph]: { zuBild: f.zuBild as (q: XY) => XY, zeit: video.current?.currentTime ?? 0, ansicht } }))
+    else setBezug((x) => { const y = { ...x }; delete y[ph]; return y })
+  }
+  function uebernimm(ph: Phase) {
+    if (!figur) return
+    merkeBezug(ph, figur)
+    uebernehmen(ph, figur.pose)
   }
 
   function seiteWechseln() {
     const el = datei?.art === 'video' ? video.current : bild.current
     if (!messung || !el) return
-    const b = el instanceof HTMLVideoElement ? el.videoWidth : el.naturalWidth
-    const h = el instanceof HTMLVideoElement ? el.videoHeight : el.naturalHeight
-    const seite = messung.seite === 'links' ? 'rechts' : 'links'
-    const m: Messung = auswerten(messung.punkte, messung.welt, seite, b, h)
-    setMessung(m); zeichne(m)
+    const [b, h] = masse(el)
+    const m = auswerten(messung.punkte, messung.welt, messung.seite === 'links' ? 'rechts' : 'links', b, h)
+    setMessung(m)
   }
 
   /** Video in Schritten vermessen und die zwei Positionen mit der größten Bewegung finden. */
@@ -300,31 +428,35 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
     const v = video.current
     if (!v || !dauer) return
     const schritte = 18
-    const liste: { t: number; m: Messung }[] = []
+    const liste: { t: number; m: Messung; f: Figurmessung }[] = []
     for (let i = 0; i < schritte; i++) {
       setStatus(`Video wird analysiert … ${Math.round((i / schritte) * 100)} %`)
       const t = (dauer * i) / (schritte - 1) * 0.98
       await springe(v, t)
       const m = await vermesse(v, v.videoWidth, v.videoHeight).catch(() => null)
-      if (m?.pose) liste.push({ t, m })
+      const f = figurAus(m, ansicht)
+      if (m && f) liste.push({ t, m, f })
     }
     if (liste.length < 3) { setStatus('Im Video war die Person zu selten ganz zu sehen.'); return }
     // Gelenk mit der größten Bewegung; Start = erstes Bild, Ende = weitester Punkt davon
-    let best: GelenkId = 'knie', spanne = -1
-    for (const g of ZAEHLBAR) {
-      const w = liste.map((x) => x.m.winkel[g]).filter((v): v is number => v != null)
-      if (w.length && Math.max(...w) - Math.min(...w) > spanne) { spanne = Math.max(...w) - Math.min(...w); best = g }
-    }
+    const best = hauptGelenk(modell, (g) => {
+      const w = liste.map((x) => x.m.winkel[g]).filter((x): x is number => x != null)
+      return w.length ? Math.max(...w) - Math.min(...w) : null
+    }) ?? modell.zaehlbar[0]
     const s = liste[0]
-    const e = liste.reduce((a, x) => (Math.abs((x.m.winkel[best] ?? 0) - (s.m.winkel[best] ?? 0)) > Math.abs((a.m.winkel[best] ?? 0) - (s.m.winkel[best] ?? 0)) ? x : a), liste[0])
-    beide(s.m.pose as FigurPose, e.m.pose as FigurPose)
-    const zs = s.m.seitlich ? bildBezug(s.m.punkte, s.m.seite, v.videoWidth, v.videoHeight) : null
-    const ze = e.m.seitlich ? bildBezug(e.m.punkte, e.m.seite, v.videoWidth, v.videoHeight) : null
-    setBezug({ ...(zs ? { start: { zuBild: zs, zeit: s.t } } : {}), ...(ze ? { ende: { zuBild: ze, zeit: e.t } } : {}) })
+    const abst = (x: typeof s) => Math.abs((x.m.winkel[best] ?? 0) - (s.m.winkel[best] ?? 0))
+    const e = liste.reduce((a, x) => (abst(x) > abst(a) ? x : a), liste[0])
+    beide(s.f.pose, e.f.pose)
+    setBezug({
+      ...(s.f.zuBild ? { start: { zuBild: s.f.zuBild, zeit: s.t, ansicht } } : {}),
+      ...(e.f.zuBild ? { ende: { zuBild: e.f.zuBild, zeit: e.t, ansicht } } : {}),
+    })
     await springe(v, e.t); setZeit(e.t)
-    setMessung(e.m); zeichne(e.m)
+    setMessung(e.m)
     setStatus(`Gefunden: ${GELENK[best].name} bewegt sich von ${rund(s.m.winkel[best])}° bis ${rund(e.m.winkel[best])}°. Beide Positionen sind übernommen – prüfe sie kurz.`)
   }
+
+  const werte = gelenkeFuer(ansicht).filter((g) => messung?.winkel[g.id] != null)
 
   return (
     <div className="stapel" style={{ gap: 10 }}>
@@ -333,7 +465,7 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
           <input type="file" accept="image/*,video/*" onChange={(e) => waehlen(e.target.files?.[0])} />
           <Icon name="hochladen" groesse={28} />
           <strong>Foto oder Video der perfekten Ausführung</strong>
-          <span className="klein leise">Aus jeder Richtung – am genauesten seitlich oder schräg von vorn, ganzer Körper im Bild. Die Datei wird nur hier im Browser vermessen und nicht hochgeladen.</span>
+          <span className="klein leise">Von vorn, von der Seite oder schräg – ganzer Körper im Bild. Die App erkennt die Richtung selbst. Die Datei wird nur hier im Browser vermessen und nicht hochgeladen.</span>
         </label>
       ) : (
         <>
@@ -352,23 +484,23 @@ function MedienVermessung({ halten, phase, posen, uebernehmen, beide }: {
             </label>
           )}
           {status && <p className="klein" role="status" style={{ margin: 0 }}>{status}</p>}
-          {messung && (
+          {messung && ansicht === 'seitlich' && (
             <button type="button" className="knopf klein still" style={{ alignSelf: 'flex-start' }} onClick={() => seiteWechseln()}>
               Andere Körperseite messen (jetzt: {messung.seite === 'links' ? 'linke' : 'rechte'})
             </button>
           )}
-          {messung?.pose && (
+          {figur && werte.length > 0 && (
             <div className="medien-werte">
-              {GELENKE.filter((g) => messung.winkel[g.id] != null).map((g) => <span key={g.id}>{g.name} <b>{rund(messung.winkel[g.id])}°</b></span>)}
+              {werte.map((g) => <span key={g.id}>{g.name} <b>{rund(messung?.winkel[g.id])}°</b></span>)}
             </div>
           )}
           <div className="reihe" style={{ flexWrap: 'wrap' }}>
             {halten ? (
-              <button type="button" className="knopf primaer" disabled={!messung?.pose} onClick={() => { if (messung?.pose) { merkeBezug('ende', messung); uebernehmen('ende', messung.pose) } }}>Als Halteposition übernehmen</button>
+              <button type="button" className="knopf primaer" disabled={!figur} onClick={() => uebernimm('ende')}>Als Halteposition übernehmen</button>
             ) : (
               <>
-                <button type="button" className={`knopf${phase === 'start' ? ' primaer' : ''}`} disabled={!messung?.pose} onClick={() => { if (messung?.pose) { merkeBezug('start', messung); uebernehmen('start', messung.pose) } }}>Als Ausgangsposition</button>
-                <button type="button" className={`knopf${phase === 'ende' ? ' primaer' : ''}`} disabled={!messung?.pose} onClick={() => { if (messung?.pose) { merkeBezug('ende', messung); uebernehmen('ende', messung.pose) } }}>Als Endposition</button>
+                <button type="button" className={`knopf${phase === 'start' ? ' primaer' : ''}`} disabled={!figur} onClick={() => uebernimm('start')}>Als Ausgangsposition</button>
+                <button type="button" className={`knopf${phase === 'ende' ? ' primaer' : ''}`} disabled={!figur} onClick={() => uebernimm('ende')}>Als Endposition</button>
               </>
             )}
             {datei.art === 'video' && !halten && <button type="button" className="knopf" onClick={() => void automatisch()}><Icon name="aktualisieren" groesse={18} />Automatisch finden</button>}
@@ -395,8 +527,8 @@ function springe(v: HTMLVideoElement, t: number): Promise<void> {
 // Winkel mit Schiebereglern
 // ---------------------------------------------------------------------------
 
-function WinkelRegler({ r, gemessen, halten, phase, zaehlGelenkWaehlen, ueberwachen, winkelSetzen, setzeGrenze }: {
-  r: Regeln; gemessen: Record<Phase, Record<GelenkId, number | null>>; halten: boolean; phase: Phase
+function WinkelRegler({ r, modell, gemessen, halten, phase, zaehlGelenkWaehlen, ueberwachen, winkelSetzen, setzeGrenze }: {
+  r: Regeln; modell: Modell; gemessen: Record<Phase, Record<GelenkId, number | null>>; halten: boolean; phase: Phase
   zaehlGelenkWaehlen: (g: GelenkId) => void; ueberwachen: (g: GelenkId, an: boolean) => void
   winkelSetzen: (g: GelenkId, v: number) => void; setzeGrenze: (g: GelenkId, f: 'min' | 'max', v: number) => void
 }) {
@@ -407,7 +539,7 @@ function WinkelRegler({ r, gemessen, halten, phase, zaehlGelenkWaehlen, ueberwac
         <h3 className="karte-titel">Winkel {halten ? '' : phase === 'start' ? '– Ausgangsposition' : '– Endposition'}</h3>
         <span className="klein leise">Schieberegler bewegen die Figur{' '}und das Skelett auf dem Foto mit. Oben zwischen Ausgangs- und Endposition wechseln.</span>
       </div>
-      {GELENKE.map((g) => {
+      {gelenkeFuer(modell.ansicht).map((g) => {
         const zaehlt = !halten && r.zaehlen?.gelenk === g.id
         const auto = r.pruefungen.find((p) => p.id === AUTO + g.id)
         const ms = rund(gemessen.start[g.id]), me = rund(gemessen.ende[g.id])
@@ -418,9 +550,9 @@ function WinkelRegler({ r, gemessen, halten, phase, zaehlGelenkWaehlen, ueberwac
               <span className="winkel-name" title={g.erklaerung}>{g.name}</span>
               <span className="klein leise">{halten ? `${me ?? '–'}°` : `${ms ?? '–'}° → ${me ?? '–'}°`}</span>
             </div>
-            {jetzt !== null && <Regler name={positionName} wert={jetzt} max={g.id === 'rumpfneigung' || g.id === 'kopfhaltung' ? 90 : 180} aendern={(v) => winkelSetzen(g.id, v)} />}
+            {jetzt !== null && <Regler name={positionName} wert={jetzt} max={g.max} aendern={(v) => winkelSetzen(g.id, v)} />}
             <div className="reihe" style={{ gap: 14, flexWrap: 'wrap' }}>
-              {!halten && ZAEHLBAR.includes(g.id) && (
+              {!halten && modell.zaehlbar.includes(g.id) && (
                 <label className="reihe klein" style={{ gap: 6 }}><input type="radio" name="zaehlgelenk" checked={zaehlt} onChange={() => zaehlGelenkWaehlen(g.id)} />zählt die Wiederholung</label>
               )}
               {!zaehlt && <label className="reihe klein" style={{ gap: 6 }}><input type="checkbox" checked={!!auto} onChange={(e) => ueberwachen(g.id, e.target.checked)} />überwachen</label>}
