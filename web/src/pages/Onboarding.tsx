@@ -298,8 +298,8 @@ export function UeberDichSchritt({ bearbeiten = false }: { bearbeiten?: boolean 
 }
 
 /* ------------------------------------------------------------ 4 Datenschutz */
-export async function speichereEinwilligungen(userId: string, werte: Record<EinwilligungArt, boolean>) {
-  const zeilen = (Object.keys(werte) as EinwilligungArt[]).map((art) => ({ user_id: userId, art, erteilt: werte[art], text_version: EINWILLIGUNG_VERSION }))
+export async function speichereEinwilligungen(userId: string, werte: Partial<Record<EinwilligungArt, boolean>>) {
+  const zeilen = (Object.keys(werte) as EinwilligungArt[]).map((art) => ({ user_id: userId, art, erteilt: !!werte[art], text_version: EINWILLIGUNG_VERSION }))
   return await supabase.from('einwilligungen').upsert(zeilen)
 }
 
@@ -333,7 +333,7 @@ export function DatenschutzSchritt() {
         <h1 className="display display-l">Deine Daten bleiben deine.</h1>
         <div className="karte"><Schalter an={werte.gesundheitsdaten} beiAenderung={setze('gesundheitsdaten')} titel="Gesundheitsangaben nutzen" text="Ziele, Beschwerden und Befinden, damit Antworten und Pläne zu dir passen." /></div>
         <div className="karte"><Schalter an={werte.kamera} beiAenderung={setze('kamera')} titel="Kamera für den Trainer-Modus" text="Das Bild bleibt auf deinem Gerät. Gespeichert werden nur Wiederholungen, Bewertung und Korrekturhinweise." /></div>
-        <div className="karte"><Schalter an={werte.trainer_freigabe} beiAenderung={setze('trainer_freigabe')} titel="Trainer darf Fortschritt sehen" text="So kann dich das Team gezielt betreuen. Deine Chats liest das Team nur, wenn eine Frage an das Team weitergegeben wird." /></div>
+        <div className="karte"><Schalter an={werte.trainer_freigabe} beiAenderung={setze('trainer_freigabe')} titel="Trainer darf Fortschritt sehen" text="So kann dich das Team gezielt betreuen. Deine Chats liest das Team nicht – nur Fragen, die der Assistent nicht beantworten kann, gehen an das Team, damit es dir antwortet." /></div>
         <p className="klein leise" style={{ margin: 0 }}>Alles freiwillig und jederzeit im Profil änderbar. <a href={DATENSCHUTZ_URL} target="_blank" rel="noreferrer">Datenschutzerklärung lesen</a></p>
         <Fehler text={fehler} />
         <div className="unten">

@@ -114,7 +114,13 @@ export async function kameraStarten(video: HTMLVideoElement, richtung: Kamera): 
   video.srcObject = strom
   video.muted = true
   video.playsInline = true
-  await video.play()
+  try {
+    await video.play()
+  } catch (e) {
+    // Sonst bliebe die Kamera an (z. B. bei schnellem Wechsel Front-/Rückkamera)
+    kameraStoppen(strom)
+    throw e
+  }
   return strom
 }
 

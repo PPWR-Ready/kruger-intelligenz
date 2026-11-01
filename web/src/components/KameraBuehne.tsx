@@ -64,7 +64,13 @@ export function KameraBuehne({ gelenke, fehler = [], beimBild, pausiert = false,
       setStatus({ art: 'laedt' })
       try {
         const v = video.current as HTMLVideoElement
-        const [e, st] = await Promise.all([erkennungLaden(), kameraStarten(v, richtung)])
+        const [er, ka] = await Promise.allSettled([erkennungLaden(), kameraStarten(v, richtung)])
+        // Scheitert eine Seite, die andere aufräumen (Kamera nicht offen lassen)
+        if (er.status === 'rejected' || ka.status === 'rejected') {
+          if (ka.status === 'fulfilled') kameraStoppen(ka.value)
+          throw er.status === 'rejected' ? er.reason : (ka as PromiseRejectedResult).reason
+        }
+        const e = er.value, st = ka.value
         erkennung = e
         if (aus) { kameraStoppen(st); return }
         strom.current = st

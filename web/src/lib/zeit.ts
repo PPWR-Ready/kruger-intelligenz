@@ -13,7 +13,7 @@ export function wochentag(d = new Date()): string {
 }
 
 export function relativ(iso: string): string {
-  const tage = Math.floor((startDesTages(new Date()).getTime() - startDesTages(new Date(iso)).getTime()) / 86400000)
+  const tage = Math.round((startDesTages(new Date()).getTime() - startDesTages(new Date(iso)).getTime()) / 86400000)
   if (tage <= 0) return 'heute'
   if (tage === 1) return 'gestern'
   if (tage < 7) return `vor ${tage} Tagen`

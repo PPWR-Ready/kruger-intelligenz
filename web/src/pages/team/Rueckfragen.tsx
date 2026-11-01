@@ -74,8 +74,9 @@ export function TeamRueckfragen() {
 function RueckfrageKarte({ r, fertig }: { r: Zeile; fertig: (text: string) => void }) {
   const s = useSitzung()
   const [antwort, setAntwort] = useState('')
-  const [alsWissen, setAlsWissen] = useState(true)
-  const [titel, setTitel] = useState(r.frage.slice(0, 120))
+  // Bewusst aus und leer: Die Originalfrage kann persönliche Gesundheitsangaben enthalten
+  const [alsWissen, setAlsWissen] = useState(false)
+  const [titel, setTitel] = useState('')
   const [themen, setThemen] = useState<string[]>([])
   const [entwurfOffen, setEntwurfOffen] = useState(false)
   const [laeuft, setLaeuft] = useState(false)
@@ -84,6 +85,7 @@ function RueckfrageKarte({ r, fertig }: { r: Zeile; fertig: (text: string) => vo
   async function senden() {
     if (!s.profil) return
     if (antwort.trim().length < 5) return setFehler('Bitte schreib eine Antwort.')
+    if (alsWissen && titel.trim().length < 5) return setFehler('Bitte gib dem Wissen eine allgemeine Frage als Titel – ohne Namen oder persönliche Angaben.')
     setLaeuft(true)
     setFehler(null)
     const { error } = await supabase.from('rueckfragen').update({
@@ -95,7 +97,7 @@ function RueckfrageKarte({ r, fertig }: { r: Zeile; fertig: (text: string) => vo
       try {
         const e = await wissenSpeichern({
           titel, themen, sichtbarkeit: 'alle', quelle: 'Rückfrage aus der App', eingabeweg: 'rueckfrage', rueckfrageId: r.id, global: false,
-          inhalt: `Frage: ${r.frage}\n\nAntwort: ${antwort.trim()}`,
+          inhalt: `Frage: ${titel.trim()}\n\nAntwort: ${antwort.trim()}`,
         }, s.profil, s.istGruender)
         return fertig(e.freigegeben ? 'Beantwortet und als Wissen freigegeben' : 'Beantwortet, Wissen zur Freigabe eingereicht')
       } catch (err) {
@@ -142,7 +144,8 @@ function RueckfrageKarte({ r, fertig }: { r: Zeile; fertig: (text: string) => vo
       </label>
       {alsWissen && (
         <div className="stapel" style={{ gap: 10 }}>
-          <label className="feld"><span>Titel für das Wissen</span><input value={titel} onChange={(e) => setTitel(e.target.value)} maxLength={160} /></label>
+          <label className="feld"><span>Allgemeine Frage als Titel</span><input value={titel} onChange={(e) => setTitel(e.target.value)} maxLength={160} placeholder="z. B. Darf ich mit Bandscheibenvorfall Five trainieren?" /></label>
+          <p className="klein leise" style={{ margin: 0 }}>Das Wissen sehen alle Mitglieder. Bitte keine Namen oder persönlichen Angaben aus der Frage übernehmen – auch nicht in der Antwort.</p>
           <div className="chips" role="group" aria-label="Themen">
             {THEMEN.map((t) => (
               <button key={t} type="button" className="chip" aria-pressed={themen.includes(t)} onClick={() => setThemen(themen.includes(t) ? themen.filter((x) => x !== t) : [...themen, t])}>{t}</button>

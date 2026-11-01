@@ -182,7 +182,7 @@ export function KameraTraining() {
       await frageStellen({ frage: text, verlauf_id: verlaufId.current, kontext: 'trainer_modus', uebung: uebung.name }, {
         beimStart: (v) => { verlaufId.current = v },
         beimText: (t) => { antwort += t; setFrage({ status: 'antwort', text, antwort }) },
-        beimEnde: () => { setFrage({ status: 'antwort', text, antwort }); if (antwort) vorlesen(ohneMarkdown(antwort)) },
+        beimEnde: () => { setFrage({ status: 'antwort', text, antwort }); if (antwort) sprich(ohneMarkdown(antwort)) },
       })
     } catch (e) {
       setFrage({ status: 'antwort', text, antwort: e instanceof Error ? e.message : 'Der Assistent ist gerade nicht erreichbar.' })

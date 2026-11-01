@@ -180,7 +180,7 @@ async function beantworte(admin: SupabaseClient, profil: Profil, body: Record<st
     ])
     gesundheit = g
     letzteEinheiten = (e ?? []).map((x) => ({
-      datum: new Date(x.gestartet_am).toLocaleDateString('de-DE'),
+      datum: new Date(x.gestartet_am).toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' }),
       befinden: x.befinden,
     }))
   }
