@@ -40,6 +40,7 @@ export function Profil() {
 
   async function einwilligungAendern(art: EinwilligungArt, an: boolean) {
     if (!s.profil) return
+    if (art === 'gesundheitsdaten' && !an && !confirm('Deine gespeicherten Ziele und Beschwerden werden dabei gelöscht. Fortfahren?')) return
     setFehler(null)
     // Nur die geänderte Einwilligung speichern – sonst könnte ein schneller zweiter Klick einen Widerruf überschreiben
     const { error } = await speichereEinwilligungen(s.profil.id, { [art]: an })
@@ -134,13 +135,13 @@ export function Profil() {
 
       <section className="stapel">
         <h2 className="untertitel" style={{ fontSize: 17 }}>Meine Daten</h2>
-        <button className="knopf voll" onClick={() => void datenExportieren()}><Icon name="herunterladen" groesse={20} />Alle Daten herunterladen</button>
+        <button className="knopf voll" onClick={() => void datenExportieren()}><Icon name="herunterladen" groesse={20} />Alle Daten herunterladen (Datei für Fachleute)</button>
         {loeschLink
           ? <a className="knopf still voll" href={loeschLink}>Konto löschen lassen</a>
           : <p className="klein leise" style={{ margin: 0 }}>Konto löschen: Sprich das Team im Studio an.</p>}
       </section>
 
-      <button className="knopf kritisch voll" onClick={() => void s.abmelden()}><Icon name="abmelden" groesse={20} />Abmelden</button>
+      <button className="knopf kritisch voll" onClick={() => { if (confirm('Wirklich abmelden?')) void s.abmelden() }}><Icon name="abmelden" groesse={20} />Abmelden</button>
       <Rechtliches />
       {mitteilung}
     </div>

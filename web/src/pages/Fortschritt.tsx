@@ -4,7 +4,7 @@ import { fehlertext, supabase } from '../lib/supabase'
 import { useSitzung } from '../lib/sitzung'
 import { datumLang, relativ, tageswert, wochenmittel, wochenstart } from '../lib/zeit'
 import type { Einheit, Uebung } from '../lib/db'
-import { Fehler, Kachel, Laden, Skala, Verlauf, Zurueck, useMitteilung } from '../components/Bausteine'
+import { Fehler, Kachel, Laden, Ladefehler, Skala, Verlauf, Zurueck, useMitteilung } from '../components/Bausteine'
 import { Icon } from '../components/Icon'
 
 type EinheitMitSaetzen = Einheit & { saetze: { uebung_id: string; wiederholungen: number; uebungen: { name: string } | null }[] }
@@ -13,15 +13,21 @@ type EinheitMitSaetzen = Einheit & { saetze: { uebung_id: string; wiederholungen
 export function Fortschritt() {
   const s = useSitzung()
   const [einheiten, setEinheiten] = useState<EinheitMitSaetzen[] | null>(null)
+  const [ladefehler, setLadefehler] = useState<string | null>(null)
+  const [versuch, setVersuch] = useState(0)
 
   useEffect(() => {
     if (!s.profil) return
     const seit = new Date(Date.now() - 12 * 7 * 86400000).toISOString()
     void supabase.from('einheiten').select('*, saetze(uebung_id, wiederholungen, uebungen(name))').eq('mitglied_id', s.profil.id).gte('gestartet_am', seit)
       .order('gestartet_am', { ascending: false })
-      .then(({ data }) => setEinheiten((data ?? []) as unknown as EinheitMitSaetzen[]))
-  }, [s.profil])
+      .then(({ data, error }) => {
+        setLadefehler(error ? fehlertext(error) : null)
+        if (!error) setEinheiten((data ?? []) as unknown as EinheitMitSaetzen[])
+      })
+  }, [s.profil, versuch])
 
+  if (ladefehler) return <div className="seite"><Ladefehler text={ladefehler} erneut={() => setVersuch((v) => v + 1)} /></div>
   if (!einheiten) return <div className="seite"><Laden /></div>
 
   const werte = wochenmittel(einheiten, 8)
@@ -46,7 +52,7 @@ export function Fortschritt() {
             <div className="reihe" style={{ alignItems: 'baseline', gap: 12 }}>
               <span className="display display-l" style={{ fontSize: 44 }}>{letzter.toFixed(1).replace('.', ',')}</span>
               <span className="klein" style={{ color: letzter <= erster ? 'var(--success)' : 'var(--critical)' }}>
-                {letzter <= erster ? 'runter' : 'rauf'} von {erster.toFixed(1).replace('.', ',')}
+                Ø zuletzt pro Woche · vorher {erster.toFixed(1).replace('.', ',')}, {letzter <= erster ? 'gesunken' : 'gestiegen'}
               </span>
             </div>
             <Verlauf werte={werte} beschriftung={`Wochenmittel Rückenschmerz, zuletzt ${letzter}`} farbe={letzter <= erster ? 'var(--success)' : 'var(--critical)'} />
@@ -155,7 +161,7 @@ export function EinheitErfassen() {
         </label>
 
         <div className="stapel">
-          <h2 className="untertitel" style={{ fontSize: 17 }}>Wie geht es deinem Rücken?</h2>
+          <h2 className="untertitel" style={{ fontSize: 17 }}>Wie stark sind deine Rückenschmerzen gerade?</h2>
           <Skala wert={befinden} beiWahl={(w) => setBefinden(befinden === w ? null : w)} />
         </div>
 

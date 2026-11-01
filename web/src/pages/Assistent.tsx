@@ -172,7 +172,7 @@ export function Assistent() {
           <span className="chat-kopf-name">Rückgrat</span>
         </div>
         <button type="button" className={`chat-kopf-knopf${leer ? ' versteckt' : ''}`} onClick={neuesGespraech} aria-label="Neuer Chat" disabled={leer}>
-          <Icon name="neu" groesse={21} />
+          <Icon name="plus" groesse={22} />
         </button>
       </header>
 

@@ -108,14 +108,15 @@ export function KameraTraining() {
     setSchritt('satz')
   }, [regeln])
 
+  // 10 Sekunden: Zeit, das Handy hinzustellen und in Position zu gehen; die letzten drei werden gezählt
   const mitCountdownStarten = useCallback(() => {
     window.clearInterval(countdownUhr.current)
-    let n = 3
+    let n = 10
     setCountdown(n)
-    sprich('Drei')
+    sprich('Geh in Position.')
     countdownUhr.current = window.setInterval(() => {
       n -= 1
-      if (n > 0) { setCountdown(n); sprich(n === 2 ? 'Zwei' : 'Eins') }
+      if (n > 0) { setCountdown(n); if (n <= 3) sprich(n === 3 ? 'Drei' : n === 2 ? 'Zwei' : 'Eins') }
       else {
         window.clearInterval(countdownUhr.current)
         setCountdown(null)
@@ -281,8 +282,8 @@ export function KameraTraining() {
   return (
     <main className="trainer">
       <Kopf titel={uebung.name} rechts={
-        <button type="button" className="knopf klein still" onClick={tonUmschalten} aria-pressed={ton}>
-          <Icon name="lautsprecher" groesse={20} />{ton ? 'Ansage an' : 'Ansage aus'}
+        <button type="button" className="knopf klein still" onClick={tonUmschalten} aria-pressed={ton} aria-label="Sprachansage" title={ton ? 'Sprachansage ist an' : 'Sprachansage ist aus'}>
+          <Icon name={ton ? 'lautsprecher' : 'stumm'} groesse={22} />
         </button>
       } />
 
@@ -293,6 +294,17 @@ export function KameraTraining() {
 
       {schritt === 'vorbereitung' && (
         <section className="stapel">
+          {countdown !== null ? (
+            <div className="stapel" style={{ gap: 8, alignItems: 'center' }}>
+              <div className="countdown" role="status" aria-live="assertive">{countdown}</div>
+              <span className="klein leise">{countdown > 3 ? 'Geh in Position …' : 'Gleich geht’s los'}</span>
+              <button type="button" className="knopf klein still" onClick={() => { window.clearInterval(countdownUhr.current); setCountdown(null); sprich('Los!'); satzStarten() }}>Sofort starten</button>
+            </div>
+          ) : (
+            <button type="button" className="knopf primaer voll" onClick={mitCountdownStarten}>
+              {saetze.length ? `Satz ${saetze.length + 1} starten` : 'Satz starten'}
+            </button>
+          )}
           {regeln.endhalten_sekunden && (
             <div className="karte akzent klein" style={{ gap: 4 }}>
               <strong>So geht’s</strong>
@@ -301,13 +313,6 @@ export function KameraTraining() {
           )}
           <p className="klein leise" style={{ margin: 0 }}>{ansichtHinweis(regeln)}{uebung.beschreibung ? ` ${uebung.beschreibung}` : ''}</p>
           {saetze.length === 0 && <ErklaervideoLink klein />}
-          {countdown !== null ? (
-            <div className="countdown" role="status" aria-live="assertive">{countdown}</div>
-          ) : (
-            <button type="button" className="knopf primaer voll" onClick={mitCountdownStarten}>
-              {saetze.length ? `Satz ${saetze.length + 1} starten` : 'Satz starten'}
-            </button>
-          )}
         </section>
       )}
 
@@ -315,7 +320,7 @@ export function KameraTraining() {
         <section className="stapel">
           <div className="reihe zwischen" style={{ flexWrap: 'nowrap', alignItems: 'center' }}>
             <div className="zaehlwerk" aria-live="polite">
-              <span className="zahl">{regeln.modus === 'halten' ? `${stand.gehalten}s` : stand.wiederholungen}</span>
+              <span className="zahl">{regeln.modus === 'halten' ? `${stand.gehalten} s` : stand.wiederholungen}</span>
               <span className="leise">{ziel}</span>
             </div>
             {regeln.endhalten_sekunden && (stand.halteRest !== null || stand.gehaltenInWdh) && (
@@ -346,39 +351,55 @@ export function KameraTraining() {
       {schritt === 'satz_ende' && (
         <section className="stapel">
           <Fehler text={fehler} />
-          <div className="knopfreihe">
-            <button type="button" className="knopf primaer" disabled={speichert} onClick={async () => { if (await satzSpeichern()) { setSchritt('vorbereitung'); mitCountdownStarten() } }}>Nächster Satz</button>
-            <button type="button" className="knopf" disabled={speichert} onClick={async () => { if (await satzSpeichern()) setSchritt('abschluss') }}>Fertig</button>
-          </div>
-          <button type="button" className="knopf still klein" disabled={speichert} onClick={() => { auswertung.current = null; setSchritt(saetze.length ? 'abschluss' : 'vorbereitung') }}>Satz verwerfen</button>
+          {stand && stand.wiederholungen === 0 && stand.gehalten === 0 ? (
+            // Nichts erkannt: kein leerer Satz speichern, sondern direkt neu versuchen
+            <div className="knopfreihe">
+              <button type="button" className="knopf primaer" onClick={() => { auswertung.current = null; setSchritt('vorbereitung'); mitCountdownStarten() }}>Nochmal versuchen</button>
+              {saetze.length > 0
+                ? <button type="button" className="knopf" onClick={() => { auswertung.current = null; setSchritt('abschluss') }}>Fertig</button>
+                : <Link to="/trainieren" className="knopf">Zurück zu den Übungen</Link>}
+            </div>
+          ) : (
+            <>
+              <div className="knopfreihe">
+                <button type="button" className="knopf primaer" disabled={speichert} onClick={async () => { if (await satzSpeichern()) { setSchritt('vorbereitung'); mitCountdownStarten() } }}>Nächster Satz</button>
+                <button type="button" className="knopf" disabled={speichert} onClick={async () => { if (await satzSpeichern()) setSchritt('abschluss') }}>Fertig</button>
+              </div>
+              <button type="button" className="knopf still klein" disabled={speichert} onClick={() => { auswertung.current = null; setSchritt(saetze.length ? 'abschluss' : 'vorbereitung') }}>Satz verwerfen</button>
+            </>
+          )}
         </section>
       )}
 
       {schritt === 'abschluss' && (
         <section className="stapel">
           {saetze.length === 0 ? (
-            <div className="leer">Kein Satz gespeichert.</div>
+            <div className="leer">Diesmal wurde kein Satz gespeichert – kein Problem.</div>
           ) : (
             <div className="karte">
               <h2 className="untertitel">Gespeichert</h2>
               {saetze.map((x) => (
                 <div key={x.nr} className="zeile" style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Satz {x.nr}: {x.dauer !== null ? `${x.dauer} s gehalten` : `${x.wiederholungen} Wdh.`}</span>
-                  <span className={`status ${x.qualitaet === 'sauber' ? 'erfolg' : x.qualitaet === 'gut' ? 'neutral' : 'warnung'}`}>{x.qualitaet}</span>
+                  <span className={`status ${x.qualitaet === 'sauber' ? 'erfolg' : x.qualitaet === 'gut' ? 'neutral' : 'warnung'}`}>{QUALITAET[x.qualitaet] ?? x.qualitaet}</span>
                 </div>
               ))}
-              <p className="klein" style={{ margin: '8px 0 0' }}>Wie geht's deinem Rücken jetzt? (0 = keine Schmerzen)</p>
+              <p className="klein" style={{ margin: '8px 0 0' }}>Wie stark sind deine Rückenschmerzen jetzt? (0 = keine)</p>
               <Skala wert={befinden} beiWahl={setBefinden} />
             </div>
           )}
           <Fehler text={fehler} />
-          <button type="button" className="knopf primaer voll" disabled={speichert} onClick={() => void trainingBeenden()}>Training abschließen</button>
+          {saetze.length > 0
+            ? <button type="button" className="knopf primaer voll" disabled={speichert} onClick={() => void trainingBeenden()}>Training abschließen</button>
+            : <Link to="/trainieren" className="knopf primaer voll">Zur Übungsliste</Link>}
           <button type="button" className="knopf voll" onClick={() => setSchritt('vorbereitung')}>Noch ein Satz</button>
         </section>
       )}
     </main>
   )
 }
+
+const QUALITAET: Record<string, string> = { sauber: 'Sauber ✓', gut: 'Gut', anpassen: 'Noch anpassen' }
 
 function Kopf({ titel, rechts }: { titel: string; rechts?: ReactNode }) {
   return (
@@ -448,7 +469,7 @@ function SatzZusammenfassung({ regeln, stand }: { regeln: Regeln; stand: Stand }
     <section className="karte">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 className="untertitel">{regeln.modus === 'halten' ? `${stand.gehalten} s sauber gehalten` : `${stand.wiederholungen} Wiederholungen`}</h2>
-        {(regeln.modus === 'halten' ? stand.gehalten > 0 : stand.wiederholungen > 0) && <span className={`status ${q === 'sauber' ? 'erfolg' : q === 'gut' ? 'neutral' : 'warnung'}`}>{q}</span>}
+        {(regeln.modus === 'halten' ? stand.gehalten > 0 : stand.wiederholungen > 0) && <span className={`status ${q === 'sauber' ? 'erfolg' : q === 'gut' ? 'neutral' : 'warnung'}`}>{QUALITAET[q]}</span>}
       </div>
       {(regeln.modus === 'halten' ? stand.gehalten === 0 : stand.wiederholungen === 0) ? (
         <p className="klein" style={{ margin: 0 }}>Noch nichts erkannt. Stell das Handy so auf, dass dein ganzer Körper zu sehen ist, und versuch es noch einmal.</p>
@@ -457,7 +478,7 @@ function SatzZusammenfassung({ regeln, stand }: { regeln: Regeln; stand: Stand }
       ) : (
         <ul className="klein" style={{ margin: 0, paddingLeft: 18 }}>
           {[...gruppen].map(([text, liste]) => (
-            <li key={text}>{text} <span className="leise">({liste.length}× · {GELENK[liste[0].gelenk].name} bis {liste[0].winkel}°)</span></li>
+            <li key={text}>{text} <span className="leise">({liste.length === 1 ? 'einmal' : `${liste.length}-mal`})</span></li>
           ))}
         </ul>
       )}

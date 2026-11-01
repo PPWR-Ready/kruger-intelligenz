@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { fehlertext, supabase } from '../lib/supabase'
+import { Laden, Ladefehler } from '../components/Bausteine'
 import type { Uebung } from '../lib/db'
 import { leseRegeln } from '../lib/pose/regeln'
 import { Icon } from '../components/Icon'
@@ -10,13 +11,22 @@ import { erkennungVorladen } from '../lib/pose/erkennung'
 
 export function Trainieren() {
   const [uebungen, setUebungen] = useState<Uebung[] | null>(null)
+  const [ladefehler, setLadefehler] = useState<string | null>(null)
+
+  const laden = useCallback(() => {
+    void supabase.from('uebungen').select('id, studio_id, name, kategorie, an_geraet, beschreibung, status, regeln').eq('status', 'freigegeben').order('name')
+      .then(({ data, error }) => {
+        // Bei schlechtem Netz nicht „keine Übungen“ zeigen, sondern ehrlich den Fehler
+        setLadefehler(error ? fehlertext(error) : null)
+        if (!error) setUebungen((data ?? []) as Uebung[])
+      })
+  }, [])
 
   useEffect(() => {
-    void supabase.from('uebungen').select('id, studio_id, name, kategorie, an_geraet, beschreibung, status, regeln').eq('status', 'freigegeben').order('name')
-      .then(({ data }) => setUebungen((data ?? []) as Uebung[]))
+    laden()
     // Wer die Übungen ansieht, startet wahrscheinlich gleich die Kamera
     erkennungVorladen()
-  }, [])
+  }, [laden])
 
   return (
     <div className="seite">
@@ -28,7 +38,7 @@ export function Trainieren() {
       <ErklaervideoLink />
 
       <section className="stapel" style={{ gap: 14 }}>
-        {uebungen === null ? null : uebungen.length === 0 ? (
+        {ladefehler ? <Ladefehler text={ladefehler} erneut={laden} /> : uebungen === null ? <Laden text="Übungen werden geladen …" /> : uebungen.length === 0 ? (
           <div className="leer">Die Übungsbibliothek wird gerade vom Team aufgebaut.</div>
         ) : (
           uebungen.map((u) => {
@@ -40,14 +50,17 @@ export function Trainieren() {
             ] : []
             const inhalt = (
               <>
-                <div className="uebung-bild-flaeche"><UebungsBild regeln={regeln} /></div>
+                <div className="uebung-bild-flaeche">{regeln ? <UebungsBild regeln={regeln} /> : <Icon name="fortschritt" groesse={40} />}</div>
                 <div className="uebung-text">
-                  <span className="uebung-kategorie">{u.kategorie ?? (u.studio_id ? 'Studio' : 'Five')}{u.an_geraet ? ' · am Gerät' : ''}</span>
+                  {(u.kategorie || u.an_geraet) && <span className="uebung-kategorie">{[u.kategorie, u.an_geraet ? 'am Gerät' : null].filter(Boolean).join(' · ')}</span>}
                   <h2 className="uebung-name">{u.name}</h2>
                   {fakten.length > 0 && <div className="uebung-fakten">{fakten.map((f) => <span key={f}>{f}</span>)}</div>}
                   {regeln
                     ? <span className="uebung-start"><Icon name="kamera" groesse={16} />Mit Kamera starten</span>
-                    : u.beschreibung && <p className="klein leise" style={{ margin: 0 }}>{u.beschreibung}</p>}
+                    : <>
+                        {u.beschreibung && <p className="klein leise" style={{ margin: 0 }}>{u.beschreibung}</p>}
+                        <Link to="/fortschritt/neu" className="uebung-start"><Icon name="plus" groesse={16} />Ohne Kamera – hier eintragen</Link>
+                      </>}
                 </div>
               </>
             )

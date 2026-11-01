@@ -283,7 +283,7 @@ export function UeberDichSchritt({ bearbeiten = false }: { bearbeiten?: boolean 
           <h2 className="untertitel" style={{ fontSize: 17 }}>Wie oft trainierst du pro Woche?</h2>
           <div className="raster-3" role="group" aria-label="Trainingshäufigkeit">
             {(['1-2', '3-4', '5+'] as const).map((h) => (
-              <button key={h} type="button" className="chip" aria-pressed={haeufigkeit === h} style={{ borderRadius: 8, justifyContent: 'center' }} onClick={() => setHaeufigkeit(haeufigkeit === h ? null : h)}>{h.replace('-', '–')}-mal</button>
+              <button key={h} type="button" className="chip" aria-pressed={haeufigkeit === h} style={{ borderRadius: 8, justifyContent: 'center' }} onClick={() => setHaeufigkeit(haeufigkeit === h ? null : h)}>{h === '5+' ? '5 × oder öfter' : `${h.replace('-', '–')} ×`}</button>
             ))}
           </div>
         </div>
@@ -313,12 +313,20 @@ export function DatenschutzSchritt() {
 
   async function weiter() {
     if (!s.profil) return
+    const ueberDich = (() => { try { return JSON.parse(sessionStorage.getItem(UEBER_DICH) ?? 'null') as UeberDich | null } catch { return null } })()
+    // Angaben aus dem Schritt davor gingen ohne Einwilligung still verloren: einmal nachfragen
+    const hatAngaben = !!ueberDich && Object.values(ueberDich).some((v) => (Array.isArray(v) ? v.length > 0 : !!v))
+    let auswahl = werte
+    if (hatAngaben && !werte.gesundheitsdaten
+      && confirm('Deine Ziele und Beschwerden werden nur mit der Einwilligung „Gesundheitsangaben nutzen“ gespeichert. Jetzt einschalten?')) {
+      auswahl = { ...werte, gesundheitsdaten: true }
+      setWerte(auswahl)
+    }
     setLaeuft(true)
     setFehler(null)
-    const { error } = await speichereEinwilligungen(s.profil.id, werte)
+    const { error } = await speichereEinwilligungen(s.profil.id, auswahl)
     if (error) { setLaeuft(false); return setFehler(fehlertext(error)) }
-    const ueberDich = (() => { try { return JSON.parse(sessionStorage.getItem(UEBER_DICH) ?? 'null') as UeberDich | null } catch { return null } })()
-    if (werte.gesundheitsdaten && ueberDich) {
+    if (auswahl.gesundheitsdaten && ueberDich) {
       await supabase.from('gesundheitsprofil').upsert({ user_id: s.profil.id, ...ueberDich, aktualisiert_am: new Date().toISOString() })
     }
     sessionStorage.removeItem(UEBER_DICH)
