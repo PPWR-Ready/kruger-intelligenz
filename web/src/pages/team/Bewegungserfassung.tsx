@@ -377,7 +377,7 @@ function MedienVermessung({ modell, festgelegt, halten, phase, posen, uebernehme
     const el = datei?.art === 'video' ? video.current : bild.current
     if (!el) return
     const [b, h] = masse(el)
-    setStatus('Körper wird vermessen … (beim ersten Mal lädt die Erkennung, ca. 25 MB)')
+    setStatus('Körper wird vermessen … (beim ersten Mal lädt die Erkennung, ca. 12 MB)')
     try {
       const m = await vermesse(el, b, h)
       setMessung(m)

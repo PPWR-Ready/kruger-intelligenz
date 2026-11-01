@@ -6,6 +6,7 @@ import { leseRegeln } from '../lib/pose/regeln'
 import { Icon } from '../components/Icon'
 import { UebungsBild } from '../components/UebungsBild'
 import { ErklaervideoLink } from '../components/Erklaervideo'
+import { erkennungVorladen } from '../lib/pose/erkennung'
 
 export function Trainieren() {
   const [uebungen, setUebungen] = useState<Uebung[] | null>(null)
@@ -13,6 +14,8 @@ export function Trainieren() {
   useEffect(() => {
     void supabase.from('uebungen').select('id, studio_id, name, kategorie, an_geraet, beschreibung, status, regeln').eq('status', 'freigegeben').order('name')
       .then(({ data }) => setUebungen((data ?? []) as Uebung[]))
+    // Wer die Übungen ansieht, startet wahrscheinlich gleich die Kamera
+    erkennungVorladen()
   }, [])
 
   return (
@@ -40,7 +43,7 @@ export function Trainieren() {
                 <div className="uebung-bild-flaeche"><UebungsBild regeln={regeln} /></div>
                 <div className="uebung-text">
                   <span className="uebung-kategorie">{u.kategorie ?? (u.studio_id ? 'Studio' : 'Five')}{u.an_geraet ? ' · am Gerät' : ''}</span>
-                  <h3 className="uebung-name">{u.name}</h3>
+                  <h2 className="uebung-name">{u.name}</h2>
                   {fakten.length > 0 && <div className="uebung-fakten">{fakten.map((f) => <span key={f}>{f}</span>)}</div>}
                   {regeln
                     ? <span className="uebung-start"><Icon name="kamera" groesse={16} />Mit Kamera starten</span>
@@ -49,7 +52,7 @@ export function Trainieren() {
               </>
             )
             return regeln ? (
-              <Link key={u.id} to={`/trainieren/${u.id}`} className="uebung-karte" aria-label={`${u.name} mit Kamera trainieren`}>{inhalt}</Link>
+              <Link key={u.id} to={`/trainieren/${u.id}`} className="uebung-karte">{inhalt}</Link>
             ) : (
               <article key={u.id} className="uebung-karte">{inhalt}</article>
             )

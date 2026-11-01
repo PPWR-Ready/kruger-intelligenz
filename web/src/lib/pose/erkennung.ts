@@ -7,7 +7,7 @@ const MODELL = '/mediapipe/pose_landmarker_full-1.task'
 
 let laden: Promise<PoseLandmarker> | null = null
 
-/** Lädt die Erkennung einmal (beim ersten Start ca. 25 MB, danach aus dem Cache). */
+/** Lädt die Erkennung einmal (beim ersten Start ca. 12 MB, danach aus dem Cache). */
 export function erkennungLaden(): Promise<PoseLandmarker> {
   laden ??= (async () => {
     const { FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision')
@@ -31,6 +31,26 @@ export function erkennungLaden(): Promise<PoseLandmarker> {
     throw e
   })
   return laden
+}
+
+let vorgeladen = false
+/**
+ * Lädt Modell und Programm der Erkennung im Hintergrund vor (nur Dateien, ohne zu starten),
+ * damit der erste Kamera-Start schneller geht. Nicht bei Datensparmodus oder langsamem Netz.
+ */
+export function erkennungVorladen(): void {
+  if (vorgeladen || typeof window === 'undefined') return
+  const netz = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
+  if (netz?.saveData || /(^|-)(2g|3g)$/.test(netz?.effectiveType ?? '')) return
+  vorgeladen = true
+  const basis = __MEDIAPIPE_PFAD__.replace(/\/$/, '')
+  const los = () => {
+    for (const url of [MODELL, `${basis}/vision_wasm_internal.wasm`, `${basis}/vision_wasm_internal.js`]) {
+      void fetch(url, { priority: 'low' } as RequestInit).catch(() => { vorgeladen = false })
+    }
+  }
+  const leerlauf = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback
+  if (leerlauf) leerlauf(los, { timeout: 8000 }); else window.setTimeout(los, 3000)
 }
 
 // --- Fotos und einzelne Videobilder (Übungs-Editor) -------------------------

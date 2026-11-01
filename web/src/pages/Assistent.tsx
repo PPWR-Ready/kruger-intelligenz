@@ -240,7 +240,7 @@ export function Assistent() {
               <img src="/signet.png" alt="" width={19} height={24} className={`antwort-signet${n.laeuft ? ' denkt' : ''}`} />
               <div className="antwort-inhalt">
                 {n.laeuft && !n.inhalt ? (
-                  <span className="tippt-punkte" aria-label="Antwort wird geschrieben"><i /><i /><i /></span>
+                  <span className="tippt-punkte" role="img" aria-label="Antwort wird geschrieben"><i /><i /><i /></span>
                 ) : (
                   <div className={n.warnsignal ? 'warnkarte' : undefined}>
                     {n.warnsignal && !n.laeuft && <p className="warnkarte-kopf"><Icon name="warnung" groesse={18} />Bitte ernst nehmen</p>}

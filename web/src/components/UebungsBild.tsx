@@ -1,7 +1,7 @@
 // Animierte Figur zur Übung im Stil anatomischer Trainings-Illustrationen:
 // Körper mit Volumen und weicher Schattierung, die beanspruchten Muskeln rot hervorgehoben.
 // Ablauf: in die Endposition, dort halten, langsam zurück. Abgeleitet aus den Kamera-Regeln.
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { Regeln } from '../lib/pose/regeln'
 import { STEHEN, type FigurPose as Pose, type XY } from '../lib/pose/figur'
 import { VORN_STEHEN, setzeVornWinkel, type VornPose } from '../lib/pose/figurVorn'
@@ -219,27 +219,58 @@ export function UebungsBild({ regeln, groesse = 104 }: { regeln: Regeln | null; 
   return <UebungsBildSeite regeln={regeln} groesse={groesse} />
 }
 
-/** Bewegungsablauf in Sekunden seit dem Einblenden (bei reduzierter Bewegung: Endposition). */
-function useZeit(): number {
+/**
+ * Bewegungsablauf in Sekunden seit dem Einblenden (bei reduzierter Bewegung: Endposition).
+ * Spart Akku: zeichnet nur, solange die Figur sichtbar ist und sich gerade bewegt –
+ * in den Haltephasen der Animation und im Hintergrund ruht die Schleife.
+ */
+function useZeit(ziel: { current: Element | null }): number {
   const [t, setT] = useState(0)
   useEffect(() => {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setT(2); return }
-    let rahmen = 0
+    let rahmen = 0, sichtbar = true, ruhe = ''
     const beginn = performance.now()
-    const lauf = () => { setT((performance.now() - beginn) / 1000); rahmen = requestAnimationFrame(lauf) }
-    rahmen = requestAnimationFrame(lauf)
-    return () => cancelAnimationFrame(rahmen)
-  }, [])
+    const lauf = () => {
+      rahmen = 0
+      if (!sichtbar || document.hidden) return
+      const jetzt = (performance.now() - beginn) / 1000, s = jetzt % 6
+      // Ruhephasen (halten bzw. Pause): einmal zeichnen, dann bis zur nächsten Bewegung warten
+      const phase = s >= 1.2 && s < 4.2 ? 'halten' : s >= 5.1 ? 'pause' : ''
+      if (phase) {
+        if (ruhe !== phase) { ruhe = phase; setT(jetzt) }
+        const bis = (phase === 'halten' ? 4.2 : 6) - s
+        rahmen = window.setTimeout(() => { rahmen = requestAnimationFrame(lauf) }, bis * 1000) as unknown as number
+        return
+      }
+      ruhe = ''
+      setT(jetzt)
+      rahmen = requestAnimationFrame(lauf)
+    }
+    const weiter = () => { if (!rahmen) rahmen = requestAnimationFrame(lauf) }
+    const beobachter = 'IntersectionObserver' in window && ziel.current
+      ? new IntersectionObserver(([e]) => { sichtbar = e.isIntersecting; if (sichtbar) weiter() })
+      : null
+    if (beobachter && ziel.current) beobachter.observe(ziel.current)
+    const sichtwechsel = () => { if (!document.hidden) weiter() }
+    document.addEventListener('visibilitychange', sichtwechsel)
+    weiter()
+    return () => {
+      cancelAnimationFrame(rahmen); clearTimeout(rahmen)
+      beobachter?.disconnect()
+      document.removeEventListener('visibilitychange', sichtwechsel)
+    }
+  }, [ziel])
   return t
 }
 
 function UebungsBildVorn({ regeln, groesse }: { regeln: Regeln; groesse: number }) {
   const { start, ende, muskeln } = figurVornFuer(regeln)
   const id = useId().replace(/:/g, '')
-  const p = mische(start, ende, anteil(useZeit()))
+  const svg = useRef<SVGSVGElement>(null)
+  const p = mische(start, ende, anteil(useZeit(svg)))
   const boden = Math.max(p.fussL[1], p.fussR[1]) + 3
   return (
-    <svg viewBox={ausschnitt(start, ende)} width={groesse} height={groesse} className="uebungs-bild" aria-hidden="true">
+    <svg ref={svg} viewBox={ausschnitt(start, ende)} width={groesse} height={groesse} className="uebungs-bild" aria-hidden="true">
       <FigurDefs id={id} />
       <ellipse cx={(p.fussL[0] + p.fussR[0]) / 2} cy={boden} rx={16} ry={3.2} fill={`url(#${id}-schatten)`} />
       <g filter={`url(#${id}-tiefe)`}><MenschVorn p={p} muskeln={muskeln} id={id} /></g>
@@ -250,11 +281,12 @@ function UebungsBildVorn({ regeln, groesse }: { regeln: Regeln; groesse: number 
 function UebungsBildSeite({ regeln, groesse }: { regeln: Regeln | null; groesse: number }) {
   const { start, ende, muskeln } = figurFuer(regeln)
   const id = useId().replace(/:/g, '')
-  const p = mische(start, ende, anteil(useZeit()))
+  const svg = useRef<SVGSVGElement>(null)
+  const p = mische(start, ende, anteil(useZeit(svg)))
   const boden = Math.max(p.fuss[1], p.zeh[1], p.hand[1], p.ellbogen[1]) + 3
 
   return (
-    <svg viewBox={ausschnitt(start, ende)} width={groesse} height={groesse} className="uebungs-bild" aria-hidden="true">
+    <svg ref={svg} viewBox={ausschnitt(start, ende)} width={groesse} height={groesse} className="uebungs-bild" aria-hidden="true">
       <FigurDefs id={id} />
       <ellipse cx={(p.fuss[0] + p.zeh[0]) / 2 + (start === ende ? -12 : 0)} cy={boden} rx={start === ende ? 40 : 18} ry={3.2} fill={`url(#${id}-schatten)`} />
       <g filter={`url(#${id}-tiefe)`}><Mensch p={p} muskeln={muskeln} id={id} /></g>

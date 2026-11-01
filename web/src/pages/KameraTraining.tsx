@@ -54,6 +54,9 @@ export function KameraTraining() {
   const tonRef = useRef(ton)
   useEffect(() => { tonRef.current = ton }, [ton])
   const letzteAnzeige = useRef(0)
+  const standSig = useRef('')
+  // Stabil halten, damit die Kamerabühne nicht bei jedem Bild neu zeichnet
+  const aktiveGelenke = useMemo(() => stand?.aktiveFehler.map((p) => p.gelenk) ?? [], [stand])
   const hinweisBis = useRef(0) // kurze Hinweise (nicht im Bild, unvollständig) stehen lassen
 
   useEffect(() => {
@@ -146,7 +149,11 @@ export function KameraTraining() {
     if (ereignisse.length || b.zeit - letzteAnzeige.current > 100) {
       letzteAnzeige.current = b.zeit
       const st = a.stand()
-      setStand(st)
+      // Nur neu zeichnen, wenn sich etwas Sichtbares geändert hat
+      const r = (x: number | null) => (x === null ? '-' : Math.round(x * 50))
+      const sig = [st.zustand, st.wiederholungen, Math.floor(st.gehalten), st.bewertungen.length, st.korrekturen.length, r(st.fortschritt), r(st.bestFortschritt),
+        st.halteRest === null ? '-' : Math.ceil(st.halteRest * 4), st.gehaltenInWdh, st.aktiveFehler.map((p) => p.id).join(',')].join('|')
+      if (sig !== standSig.current) { standSig.current = sig; setStand(st) }
       if (st.aktiveFehler.length) setMeldung(st.aktiveFehler[0].meldung)
       else if (st.zustand === 'laeuft' && b.zeit > hinweisBis.current) { setMeldung(null); setHinweis(null) }
     }
@@ -260,7 +267,7 @@ export function KameraTraining() {
           <p className="klein" style={{ margin: 0 }}>Für das Coaching erkennt die App deine Haltung über die Kamera. Das Bild bleibt auf deinem Gerät und wird nirgends hochgeladen. Gespeichert werden nur deine Wiederholungen, die Bewertung und erkannte Korrekturen mit Winkel.</p>
           <Schalter an={false} titel="Kamera für den Trainer-Modus" text="Jederzeit im Profil widerrufbar." beiAenderung={async (an) => {
             if (!an || !s.profil) return
-            const { error } = await speichereEinwilligungen(s.profil.id, { gesundheitsdaten: !!s.einwilligungen.gesundheitsdaten, kamera: true, trainer_freigabe: !!s.einwilligungen.trainer_freigabe })
+            const { error } = await speichereEinwilligungen(s.profil.id, { kamera: true })
             if (error) setFehler(fehlertext(error)); else await s.neuLaden()
           }} />
           <Fehler text={fehler} />
@@ -270,12 +277,11 @@ export function KameraTraining() {
   }
 
   const ziel = zielText(regeln)
-  const aktiveGelenke = stand?.aktiveFehler.map((p) => p.gelenk) ?? []
 
   return (
-    <div className="trainer">
+    <main className="trainer">
       <Kopf titel={uebung.name} rechts={
-        <button type="button" className="knopf klein still" onClick={tonUmschalten} aria-pressed={ton} aria-label={ton ? 'Sprachausgabe ausschalten' : 'Sprachausgabe einschalten'}>
+        <button type="button" className="knopf klein still" onClick={tonUmschalten} aria-pressed={ton}>
           <Icon name="lautsprecher" groesse={20} />{ton ? 'Ansage an' : 'Ansage aus'}
         </button>
       } />
@@ -322,7 +328,7 @@ export function KameraTraining() {
               {stand.bewertungen.map((b, i) => <span key={i} className={b} title={b === 'sauber' ? 'sauber' : 'mit Korrektur'} />)}
             </div>
           )}
-          <div className={`meldung ${meldung ? 'fehler' : hinweis ? 'lob' : 'ruhig'}`} role="status" aria-live="assertive">
+          <div className={`meldung ${meldung ? 'fehler' : hinweis ? 'lob' : 'ruhig'}`} role="status" aria-live="polite">
             {meldung ? <><Icon name="warnung" groesse={22} />{meldung}</> : hinweis ? <><Icon name="haken" groesse={22} />{hinweis}</> : stand.zustand === 'laeuft' ? 'Haltung wird geprüft' : (ausrichtung?.text ?? 'Stell dich so hin, dass dein ganzer Körper zu sehen ist.')}
           </div>
           {frage && <FrageKarte frage={frage} schliessen={() => { vorlesenStoppen(); setFrage(null) }} />}
@@ -370,7 +376,7 @@ export function KameraTraining() {
           <button type="button" className="knopf voll" onClick={() => setSchritt('vorbereitung')}>Noch ein Satz</button>
         </section>
       )}
-    </div>
+    </main>
   )
 }
 
