@@ -135,6 +135,88 @@ export function ausKoerperpunkten(lm: Punkt[], seite: Seite, breite: number, hoe
   return p
 }
 
+/**
+ * Umkehrung zu ausKoerperpunkten: rechnet Figur-Koordinaten (0–100) zurück in
+ * Bildanteile (0–1), damit ein geändertes Skelett wieder auf dem Foto liegt.
+ */
+export function bildBezug(lm: Punkt[], seite: Seite, breite: number, hoehe: number): ((q: XY) => XY) | null {
+  const r = seite === 'rechts' ? 1 : 0
+  const ids = [P.ohrL, P.schulterL, P.ellbogenL, P.handgelenkL, P.hueftL, P.knieL, P.knoechelL, P.fussL].map((i) => i + r)
+  const roh = ids.map((i) => lm[i]).filter(Boolean).map((q) => [q.x * breite, q.y * hoehe] as XY)
+  if (roh.length < 8) return null
+  const spiegeln = roh[7][0] < roh[6][0]
+  const xs = roh.map((q) => q[0]), ys = roh.map((q) => q[1])
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
+  const sk = 80 / Math.max(x1 - x0, y1 - y0, 1)
+  const versatzX = 50 - ((x1 - x0) * sk) / 2, versatzY = 93 - (y1 - y0) * sk
+  return ([fx, fy]) => {
+    const x = (fx - versatzX) / sk
+    const bx = spiegeln ? (x1 - x0) - x + x0 : x + x0
+    return [bx / breite, ((fy - versatzY) / sk + y0) / hoehe]
+  }
+}
+
+// --- Winkel per Schieberegler setzen ---------------------------------------
+
+const OBERKOERPER: Anker[] = ['schulter', 'kopf', 'ellbogen', 'hand']
+/** Welcher Teil sich dreht, um welchen Punkt, gemessen gegen welchen Bezugspunkt. */
+const DREHUNG: Partial<Record<GelenkId, { a: Anker; b: Anker; c: Anker; teile: Anker[] }>> = {
+  knie: { a: 'huefte', b: 'knie', c: 'fuss', teile: ['fuss', 'zeh'] },
+  ellbogen: { a: 'schulter', b: 'ellbogen', c: 'hand', teile: ['hand'] },
+  schulter: { a: 'huefte', b: 'schulter', c: 'ellbogen', teile: ['ellbogen', 'hand'] },
+  huefte: { a: 'knie', b: 'huefte', c: 'schulter', teile: OBERKOERPER },
+  koerperlinie: { a: 'fuss', b: 'huefte', c: 'schulter', teile: OBERKOERPER },
+  sprunggelenk: { a: 'knie', b: 'fuss', c: 'zeh', teile: ['zeh'] },
+}
+
+function drehe(p: FigurPose, um: XY, teile: Anker[], d: number): FigurPose {
+  const neu = { ...p } as FigurPose
+  const cos = Math.cos(d), sin = Math.sin(d)
+  for (const k of teile) {
+    const x = p[k][0] - um[0], y = p[k][1] - um[1]
+    neu[k] = [begrenze(um[0] + x * cos - y * sin), begrenze(um[1] + x * sin + y * cos)]
+  }
+  return neu
+}
+
+/**
+ * Stellt einen Gelenkwinkel auf `ziel` Grad ein, indem der äußere Teil um das Gelenk
+ * gedreht wird (Längen bleiben). Die Beugerichtung bleibt erhalten.
+ */
+export function setzeWinkel(p: FigurPose, g: GelenkId, ziel: number): FigurPose {
+  const w = Math.max(0, Math.min(180, ziel)) * Math.PI / 180
+  if (g === 'rumpfneigung') {
+    // Neigung Hüfte → Schulter gegen die Senkrechte, nach vorn (Blickrichtung) bzw. wie bisher
+    const v = [p.schulter[0] - p.huefte[0], p.schulter[1] - p.huefte[1]]
+    // Figuren schauen nach rechts (Foto-Vermessung spiegelt entsprechend): nach vorn = +x
+    const seite = Math.abs(v[0]) > 0.5 ? Math.sign(v[0]) : 1
+    const ist = Math.atan2(v[1], v[0])
+    const soll = Math.atan2(-Math.cos(w), seite * Math.sin(w))
+    return drehe(p, p.huefte, OBERKOERPER, soll - ist)
+  }
+  if (g === 'kopfhaltung') {
+    // 0° = Kopf in Verlängerung Hüfte → Schulter
+    const r = [p.schulter[0] - p.huefte[0], p.schulter[1] - p.huefte[1]]
+    const k = [p.kopf[0] - p.schulter[0], p.kopf[1] - p.schulter[1]]
+    const kreuz = r[0] * k[1] - r[1] * k[0]
+    const seite = Math.abs(kreuz) > 0.01 ? Math.sign(kreuz) : 1
+    const soll = Math.atan2(r[1], r[0]) + seite * w
+    return drehe(p, p.schulter, ['kopf'], soll - Math.atan2(k[1], k[0]))
+  }
+  const d = DREHUNG[g]
+  if (!d) return p
+  const A = p[d.a], B = p[d.b], C = p[d.c]
+  const ba = Math.atan2(A[1] - B[1], A[0] - B[0]), bc = Math.atan2(C[1] - B[1], C[0] - B[0])
+  // Beugerichtung aus der aktuellen Haltung; bei gestrecktem Gelenk natürliche Richtung
+  let seite = Math.sign((A[0] - B[0]) * (C[1] - B[1]) - (A[1] - B[1]) * (C[0] - B[0]))
+  if (seite === 0 || Math.abs(Math.PI - Math.abs(((bc - ba + 3 * Math.PI) % (2 * Math.PI)) - Math.PI)) < 0.03) {
+    seite = g === 'knie' ? -1 : 1 // Figur schaut nach rechts: Knie beugt nach hinten unten, Arme nach vorn
+  }
+  const soll = ba + seite * w
+  return drehe(p, B, d.teile, soll - bc)
+}
+
+
 export function istFigurPose(v: unknown): v is FigurPose {
   if (!v || typeof v !== 'object') return false
   return ANKER.every(({ id }) => {
